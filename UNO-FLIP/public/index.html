@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO Flip - Multiplayer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Lobby Screen -->
+        <div id="lobby" class="screen active">
+            <div class="lobby-container">
+                <div class="header">
+                    <h1 class="game-title">🎮 UNO FLIP</h1>
+                    <p class="game-subtitle">Multiplayer Card Game</p>
+                </div>
+                
+                <div class="lobby-content">
+                    <div class="player-setup card">
+                        <h2>Join the Game</h2>
+                        <div class="input-group">
+                            <label for="playerName">Your Name</label>
+                            <input type="text" id="playerName" placeholder="Enter your name" maxlength="15">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="roomCode">Room Code (Optional)</label>
+                            <input type="text" id="roomCode" placeholder="Enter room code" maxlength="6">
+                        </div>
+
+                        <div class="button-group">
+                            <button id="createGame" class="btn btn-primary">
+                                🎮 Create New Game
+                            </button>
+                            <button id="joinGame" class="btn btn-secondary">
+                                🔗 Join Existing Game
+                            </button>
+                        </div>
+
+                        <div class="game-info">
+                            <h3>How to Play</h3>
+                            <ul>
+                                <li>🎯 Match color or number to play cards</li>
+                                <li>🔄 Flip the game with FLIP cards</li>
+                                <li>📢 Call UNO when you have 1 card left</li>
+                                <li>🎨 Wild cards let you choose colors</li>
+                                <li>⏭️ Skip, Reverse, and Draw 2 cards available</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="players-list card">
+                        <h2>Game Lobby</h2>
+                        <div class="lobby-info">
+                            <div class="room-info" id="roomInfo">
+                                <span>No active room</span>
+                            </div>
+                            <div class="player-count">
+                                Players: <span id="playerCount">0</span>/6
+                            </div>
+                        </div>
+                        
+                        <div id="playersContainer" class="players-container">
+                            <div class="empty-state">
+                                <p>No players yet</p>
+                                <p class="hint">Create or join a game to start playing!</p>
+                            </div>
+                        </div>
+
+                        <div class="lobby-controls">
+                            <!-- Start game button will appear here when ready -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game" class="screen">
+            <div class="game-header">
+                <div class="game-info">
+                    <div class="info-item">
+                        <span class="label">Room:</span>
+                        <span id="roomIdDisplay" class="value">---</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Side:</span>
+                        <span id="currentSide" class="value side-light">Light</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Deck:</span>
+                        <span id="deckCount" class="value">0</span>
+                    </div>
+                    <div class="current-card-info">
+                        <div class="info-item">
+                            <span class="label">Top Card:</span>
+                            <span id="currentTopCard" class="value">None</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="turn-indicator">
+                    <div class="current-turn">
+                        🎯 <span id="currentPlayerName">Waiting...</span>'s Turn
+                    </div>
+                </div>
+
+                <div class="game-controls-top">
+                    <button id="sayUno" class="btn btn-uno" disabled>📢 UNO!</button>
+                    <button id="flipDeck" class="btn btn-warning">🔄 Flip Info</button>
+                </div>
+            </div>
+
+            <div class="game-board">
+                <!-- Other players' areas -->
+                <div id="opponentsArea" class="opponents-area">
+                    <div class="opponents-placeholder">
+                        <p>Other players will appear here</p>
+                    </div>
+                </div>
+                
+                <!-- Play area with deck and discard pile -->
+                <div class="play-area">
+                    <div class="play-area-content">
+                        <div class="deck-section">
+                            <div class="deck-label">Draw Pile</div>
+                            <div id="drawPile" class="card deck" title="Click to draw a card">
+                                <div class="card-content">
+                                    <div class="card-back"></div>
+                                    <div class="card-count" id="deckCountBadge">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="discard-section">
+                            <div class="discard-label">Discard Pile</div>
+                            <div id="discardPile" class="card discard" title="Top card">
+                                <div class="card-content">
+                                    <div class="card-start">START</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="turn-instruction" id="turnInstruction">
+                        Waiting for game to start...
+                    </div>
+                </div>
+
+                <!-- Current player's hand -->
+                <div class="player-area">
+                    <div class="player-info">
+                        <div class="player-header">
+                            <h3>Your Hand</h3>
+                            <div class="player-stats">
+                                <span class="card-count" id="playerCardCount">0</span> cards
+                                <span class="uno-status" id="unoStatus"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="playerHand" class="hand">
+                        <div class="empty-hand">
+                            <p>Your cards will appear here</p>
+                        </div>
+                    </div>
+
+                    <div class="game-controls"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOver" class="screen">
+            <div class="game-over-container">
+                <div class="game-over-content card">
+                    <h1>🎉 Game Over!</h1>
+                    <div id="winnerMessage" class="winner-message">
+                        Calculating winner...
+                    </div>
+                    
+                    <div class="winner-celebration">
+                        <div class="confetti">🎊</div>
+                        <div class="confetti">🎉</div>
+                        <div class="confetti">🏆</div>
+                    </div>
+
+                    <div class="game-over-actions">
+                        <button id="playAgain" class="btn btn-primary">
+                            🔄 Play Again
+                        </button>
+                        <button onclick="window.unoClient.returnToLobby()" class="btn btn-secondary">
+                            🏠 Return to Lobby
+                        </button>
+                    </div>
+
+                    <div class="game-stats">
+                        <h3>Game Statistics</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Players</span>
+                                <span class="stat-value" id="statPlayers">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Game Duration</span>
+                                <span class="stat-value" id="statDuration">0m</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Cards Played</span>
+                                <span class="stat-value" id="statCards">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Color Choice Modal -->
+    <div id="colorModal" class="modal">
+        <div class="modal-content">
+            <h3>🎨 Choose a Color</h3>
+            <div class="color-options">
+                <button class="color-option red" data-color="red">
+                    <div class="color-swatch"></div>
+                    Red
+                </button>
+                <button class="color-option blue" data-color="blue">
+                    <div class="color-swatch"></div>
+                    Blue
+                </button>
+                <button class="color-option green" data-color="green">
+                    <div class="color-swatch"></div>
+                    Green
+                </button>
+                <button class="color-option yellow" data-color="yellow">
+                    <div class="color-swatch"></div>
+                    Yellow
+                </button>
+            </div>
+            <button id="cancelColor" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/client.js"></script>
+</body>
+</html>
