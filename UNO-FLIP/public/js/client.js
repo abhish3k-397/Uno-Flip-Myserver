@@ -8,10 +8,109 @@ class UnoClient {
         this.hasDrawnCard = false;
         this.waitingForColorChoice = false;
         this.currentWildCardIndex = null;
+        this.currentSide = 'light';
+        this.gameStartTime = null;
         
         this.initializeEventListeners();
         this.initializeColorModal();
-        this.currentSide = 'light';
+        this.addCardStyles();
+    }
+
+    addCardStyles() {
+        const style = document.createElement('style');
+        style.textContent = `
+            .card-deal-animation {
+                animation: dealCard 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            
+            @keyframes dealCard {
+                0% {
+                    transform: translateY(-100px) rotate(-10deg);
+                    opacity: 0;
+                }
+                50% {
+                    transform: translateY(-50px) rotate(5deg);
+                    opacity: 0.7;
+                }
+                100% {
+                    transform: translateY(0) rotate(0deg);
+                    opacity: 1;
+                }
+            }
+            
+            .card-play-animation {
+                animation: playCard 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+            
+            @keyframes playCard {
+                0% {
+                    transform: translateY(0) scale(1) rotate(0deg);
+                    opacity: 1;
+                    z-index: 1000;
+                }
+                50% {
+                    transform: translateY(-150px) scale(1.2) rotate(5deg);
+                    opacity: 0.8;
+                }
+                100% {
+                    transform: translateY(-300px) scale(0.8) rotate(10deg);
+                    opacity: 0;
+                    z-index: 1000;
+                }
+            }
+            
+            .draw-animation {
+                animation: drawCard 1s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            
+            @keyframes drawCard {
+                0% {
+                    transform: translateX(0) translateY(0) rotate(0deg);
+                    opacity: 1;
+                }
+                50% {
+                    transform: translateX(-50px) translateY(-100px) rotate(-10deg);
+                    opacity: 0.8;
+                }
+                100% {
+                    transform: translateX(0) translateY(0) rotate(0deg);
+                    opacity: 1;
+                }
+            }
+            
+            .glow-effect {
+                animation: glowPulse 2s infinite;
+            }
+            
+            @keyframes glowPulse {
+                0%, 100% {
+                    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+                }
+                50% {
+                    box-shadow: 0 0 40px rgba(255, 215, 0, 0.9);
+                }
+            }
+            
+            .uno-call-animation {
+                animation: unoCall 0.5s ease-in-out 3;
+            }
+            
+            @keyframes unoCall {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+            }
+            
+            .flip-animation {
+                animation: cardFlip 0.6s ease-in-out;
+            }
+            
+            @keyframes cardFlip {
+                0% { transform: rotateY(0deg); }
+                50% { transform: rotateY(90deg); }
+                100% { transform: rotateY(0deg); }
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     initializeEventListeners() {
@@ -19,8 +118,7 @@ class UnoClient {
         document.getElementById('createGame').addEventListener('click', () => this.createGame());
         document.getElementById('joinGame').addEventListener('click', () => this.joinGame());
         document.getElementById('sayUno').addEventListener('click', () => this.sayUno());
-        document.getElementById('flipDeck').addEventListener('click', () => this.flipDeck());
-        // End Turn button removed; draw auto-ends turn
+        document.getElementById('flipDeck').addEventListener('click', () => this.showFlipInfo());
         document.getElementById('playAgain').addEventListener('click', () => this.playAgain());
 
         // Draw pile click event
@@ -36,7 +134,6 @@ class UnoClient {
     }
 
     initializeColorModal() {
-        // Color modal event listeners
         const colorModal = document.getElementById('colorModal');
         if (colorModal) {
             const setOptions = (side) => {
@@ -69,7 +166,7 @@ class UnoClient {
             if (cancelBtn) {
                 cancelBtn.addEventListener('click', () => {
                     this.hideColorModal();
-                    this.showMessage('Wild card play cancelled', 'info');
+                    this.showMessage('Wild card play cancelled', 'warning');
                 });
             }
         }
@@ -81,6 +178,7 @@ class UnoClient {
         this.socket.on('connect', () => {
             console.log('Connected to server with ID:', this.socket.id);
             this.playerId = this.socket.id;
+            this.showMessage('Connected to game server!', 'success');
         });
 
         this.setupSocketListeners();
@@ -116,9 +214,8 @@ class UnoClient {
         this.socket.on('wildColorChosen', (data) => this.onWildColorChosen(data));
         this.socket.on('returnToLobby', () => this.returnToLobby());
 
-        // New events for UNO rules
+        // Special events
         this.socket.on('chooseColor', (data) => this.onChooseColor(data));
-        this.socket.on('drawnCardPlayable', (data) => this.onDrawnCardPlayable(data));
         this.socket.on('gameMessage', (data) => this.onGameMessage(data));
         this.socket.on('drawUntilColor', (data) => this.onDrawUntilColor(data));
     }
@@ -134,7 +231,6 @@ class UnoClient {
         this.playerName = playerName;
         this.connectToServer();
         
-        // Small delay to ensure connection is established
         setTimeout(() => {
             this.socket.emit('createGame', {
                 playerName: playerName,
@@ -160,7 +256,6 @@ class UnoClient {
         this.playerName = playerName;
         this.connectToServer();
 
-        // Small delay to ensure connection is established
         setTimeout(() => {
             this.socket.emit('joinGame', {
                 playerName: playerName,
@@ -172,14 +267,14 @@ class UnoClient {
 
     onGameCreated(data) {
         this.roomCode = data.roomCode;
-        this.showMessage(`Game created! Room code: ${data.roomCode}`, 'success');
+        this.showMessage(`🎮 Game created! Room code: ${data.roomCode}`, 'success');
         document.getElementById('roomIdDisplay').textContent = data.roomCode;
         this.updateLobby(data);
     }
 
     onJoinSuccess(data) {
         this.roomCode = data.roomCode;
-        this.showMessage(`Joined game: ${data.roomCode}`, 'success');
+        this.showMessage(`🔗 Joined game: ${data.roomCode}`, 'success');
         document.getElementById('roomIdDisplay').textContent = data.roomCode;
         this.updateLobby(data);
     }
@@ -206,15 +301,16 @@ class UnoClient {
         // Update room info
         if (roomInfo) {
             if (this.roomCode) {
-                roomInfo.innerHTML = `<strong>Room:</strong> ${this.roomCode}`;
+                roomInfo.innerHTML = `<i class="fas fa-hashtag"></i><strong>Room:</strong> ${this.roomCode}`;
             } else {
-                roomInfo.innerHTML = `<span>No active room</span>`;
+                roomInfo.innerHTML = `<i class="fas fa-hashtag"></i><span>No active room</span>`;
             }
         }
 
         if (data.players.length === 0) {
             playersContainer.innerHTML = `
                 <div class="empty-state">
+                    <div class="empty-icon">👥</div>
                     <p>No players yet</p>
                     <p class="hint">Create or join a game to start playing!</p>
                 </div>
@@ -225,11 +321,18 @@ class UnoClient {
         data.players.forEach(player => {
             const playerElement = document.createElement('div');
             playerElement.className = `player-item ${player.isHost ? 'host' : ''}`;
+            
+            const badges = [];
+            if (player.isHost) badges.push('<span class="host-badge">👑 Host</span>');
+            if (player.id === this.playerId) badges.push('<span class="you-badge">👤 You</span>');
+            
             playerElement.innerHTML = `
-                <div class="player-name">${player.name}</div>
+                <div class="player-info-main">
+                    <div class="player-name">${player.name}</div>
+                    <div class="player-cards">${player.handCount || 0} cards</div>
+                </div>
                 <div class="player-badge">
-                    ${player.isHost ? '<span class="host-badge">👑 Host</span>' : ''}
-                    ${player.id === this.playerId ? '<span class="you-badge">👤 You</span>' : ''}
+                    ${badges.join('')}
                 </div>
             `;
             playersContainer.appendChild(playerElement);
@@ -242,17 +345,17 @@ class UnoClient {
     }
 
     showStartGameButton() {
-        // Remove existing start button if any
         const existingButton = document.getElementById('startGameBtn');
         if (existingButton) existingButton.remove();
 
         const startButton = document.createElement('button');
         startButton.id = 'startGameBtn';
-        startButton.className = 'btn btn-success';
-        startButton.innerHTML = '🚀 Start Game';
+        startButton.className = 'btn btn-success glow';
+        startButton.innerHTML = '<i class="fas fa-rocket"></i> Start Game';
         startButton.onclick = () => this.startGame();
-        startButton.style.marginTop = '15px';
+        startButton.style.marginTop = '20px';
         startButton.style.width = '100%';
+        startButton.style.padding = '16px';
         
         const lobbyControls = document.querySelector('.lobby-controls');
         if (lobbyControls) {
@@ -267,14 +370,25 @@ class UnoClient {
         }
 
         this.socket.emit('startGame', { roomCode: this.roomCode });
+        this.showMessage('Starting game...', 'info');
     }
 
     // Game Methods
     onGameStart(data) {
         console.log('Game starting with data:', data);
+        this.gameStartTime = new Date();
         this.switchScreen('game');
         this.updateGameState(data);
-        this.showMessage('Game started! Good luck!', 'success');
+        this.showMessage('🎲 Game started! Good luck!', 'success');
+        
+        // Add initial animation to cards
+        setTimeout(() => {
+            const cards = document.querySelectorAll('.hand-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+                card.classList.add('card-deal-animation');
+            });
+        }, 100);
     }
 
     updateGameState(data) {
@@ -283,22 +397,27 @@ class UnoClient {
             return;
         }
 
-        // Set turn-related flags BEFORE rendering UI so playability is correct
+        // Set turn-related flags BEFORE rendering UI
         this.isMyTurn = data.currentPlayerId === this.playerId;
         this.hasDrawnCard = data.hasDrawnCard || false;
         this.waitingForColorChoice = data.waitingForColorChoice || false;
 
         // Update game info
-        document.getElementById('currentSide').textContent = data.currentSide ? 
-            data.currentSide.charAt(0).toUpperCase() + data.currentSide.slice(1) : 'Light';
-        document.getElementById('currentSide').className = `value side-${data.currentSide || 'light'}`;
+        const currentSideElement = document.getElementById('currentSide');
+        if (currentSideElement) {
+            currentSideElement.textContent = data.currentSide ? 
+                data.currentSide.charAt(0).toUpperCase() + data.currentSide.slice(1) : 'Light';
+            currentSideElement.className = `value side-${data.currentSide || 'light'}`;
+            currentSideElement.innerHTML = data.currentSide === 'dark' ? 
+                '<i class="fas fa-moon"></i> Dark' : '<i class="fas fa-sun"></i> Light';
+        }
         this.currentSide = data.currentSide || 'light';
         
         document.getElementById('currentPlayerName').textContent = data.currentPlayerName || 'Unknown';
         document.getElementById('deckCount').textContent = data.deckCount || 0;
         document.getElementById('deckCountBadge').textContent = data.deckCount || 0;
         
-        // Update player's hand (handle undefined)
+        // Update player's hand
         this.updatePlayerHand(data.playerHand || []);
         
         // Update opponents
@@ -327,7 +446,10 @@ class UnoClient {
             console.warn('Invalid hand data received:', hand);
             const noCardsMsg = document.createElement('div');
             noCardsMsg.className = 'empty-hand';
-            noCardsMsg.innerHTML = '<p>No cards in hand</p>';
+            noCardsMsg.innerHTML = `
+                <div class="empty-icon">🎴</div>
+                <p>No cards in hand</p>
+            `;
             handContainer.appendChild(noCardsMsg);
             return;
         }
@@ -335,7 +457,10 @@ class UnoClient {
         if (hand.length === 0) {
             const emptyHand = document.createElement('div');
             emptyHand.className = 'empty-hand';
-            emptyHand.innerHTML = '<p>🎉 No cards left! Call UNO if you have one card!</p>';
+            emptyHand.innerHTML = `
+                <div class="empty-icon">🎉</div>
+                <p>No cards left! Call UNO!</p>
+            `;
             handContainer.appendChild(emptyHand);
             return;
         }
@@ -356,6 +481,7 @@ class UnoClient {
             console.warn('Invalid players data for opponents:', players);
             opponentsArea.innerHTML = `
                 <div class="opponents-placeholder">
+                    <div class="placeholder-icon">👥</div>
                     <p>Other players will appear here</p>
                 </div>
             `;
@@ -367,6 +493,7 @@ class UnoClient {
         if (otherPlayers.length === 0) {
             opponentsArea.innerHTML = `
                 <div class="opponents-placeholder">
+                    <div class="placeholder-icon">👥</div>
                     <p>Waiting for other players to join...</p>
                 </div>
             `;
@@ -375,14 +502,16 @@ class UnoClient {
 
         otherPlayers.forEach((player, index) => {
             const opponentElement = document.createElement('div');
-            opponentElement.className = `opponent ${index === currentPlayerIndex ? 'current-turn' : ''}`;
+            opponentElement.className = `opponent ${player.id === players[currentPlayerIndex]?.id ? 'current-turn' : ''}`;
+            
+            const indicators = [];
+            if (player.hasUno) indicators.push('<div class="uno-indicator">📢 UNO!</div>');
+            if (player.isHost) indicators.push('<div class="host-indicator">👑 Host</div>');
             
             opponentElement.innerHTML = `
                 <div class="opponent-name">${player.name}</div>
-                <div class="opponent-cards">Cards: ${player.handCount || 0}</div>
-                ${player.hasUno ? '<div class="uno-indicator">📢 UNO!</div>' : ''}
-                ${player.isHost ? '<div class="host-indicator">👑 Host</div>' : ''}
-                ${player.id === this.playerId ? '<div class="you-indicator">👤 You</div>' : ''}
+                <div class="opponent-cards">${player.handCount || 0} cards</div>
+                ${indicators.join('')}
             `;
             
             opponentsArea.appendChild(opponentElement);
@@ -396,10 +525,18 @@ class UnoClient {
         if (!discardPile) return;
 
         if (topCard) {
-            discardPile.className = `card discard card-${topCard.color}`;
+            // Remove any existing color classes and set base classes
+            discardPile.className = 'uno-card discard-card';
+            // Add the correct color class
+            discardPile.classList.add(topCard.color);
+            
+            const displayValue = this.getCardDisplayValue(topCard);
+            const symbol = this.getCardSymbol(topCard);
+            
             discardPile.innerHTML = `
                 <div class="card-content">
-                    <div class="card-value">${this.getCardDisplayValue(topCard)}</div>
+                    ${symbol ? `<div class="card-symbol">${symbol}</div>` : ''}
+                    <div class="card-value">${displayValue}</div>
                     ${topCard.side ? `<div class="card-side">${topCard.side.charAt(0).toUpperCase()}</div>` : ''}
                 </div>
             `;
@@ -407,27 +544,41 @@ class UnoClient {
             
             // Update the current top card display
             if (currentTopCard) {
-                currentTopCard.textContent = `${topCard.color} ${topCard.value}`;
-                currentTopCard.className = `value card-color-${topCard.color}`;
+                // Remove any existing color classes from current top card
+                currentTopCard.className = 'uno-card';
+                // Add the correct color class
+                currentTopCard.classList.add(topCard.color);
+                
+                currentTopCard.innerHTML = `
+                    <div class="card-content">
+                        ${symbol ? `<div class="card-symbol">${symbol}</div>` : ''}
+                        <div class="card-value">${displayValue}</div>
+                    </div>
+                `;
             }
         } else {
-            discardPile.className = 'card discard';
+            // Reset to default state when no top card
+            discardPile.className = 'uno-card discard-card';
             discardPile.innerHTML = `
-                <div class="card-content">
-                    <div class="card-start">START</div>
+                <div class="card-start">
+                    <i class="fas fa-play"></i>
                 </div>
             `;
             discardPile.title = 'Starting card';
             
             if (currentTopCard) {
-                currentTopCard.textContent = 'None';
-                currentTopCard.className = 'value';
+                currentTopCard.className = 'current-card';
+                currentTopCard.innerHTML = `
+                    <div class="card-placeholder">
+                        <i class="fas fa-play-circle"></i>
+                        <span>Start Game</span>
+                    </div>
+                `;
             }
         }
     }
 
     updateTurnIndicator() {
-        const endTurnButton = null; // End Turn removed
         const sayUnoButton = document.getElementById('sayUno');
         const drawPile = document.getElementById('drawPile');
         const turnInstruction = document.getElementById('turnInstruction');
@@ -438,19 +589,23 @@ class UnoClient {
             // Enable draw pile
             drawPile.style.cursor = 'pointer';
             drawPile.style.opacity = '1';
-            drawPile.classList.add('active');
+            drawPile.classList.add('glow-effect');
             
             // Enable UNO button if player has 2 cards
             const handCount = document.getElementById('playerCardCount').textContent;
             sayUnoButton.disabled = parseInt(handCount) !== 2;
+            if (!sayUnoButton.disabled) {
+                sayUnoButton.classList.add('glow');
+            } else {
+                sayUnoButton.classList.remove('glow');
+            }
             
             if (this.waitingForColorChoice) {
-                if (turnInstruction) turnInstruction.textContent = 'Choose a color for your wild card';
-                this.showMessage('Choose a color for your wild card!', 'info');
+                if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-palette"></i><span>Choose a color for your wild card</span>';
             } else if (this.hasDrawnCard) {
-                if (turnInstruction) turnInstruction.textContent = 'You drew a card. Turn passed.';
+                if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-hand-paper"></i><span>You drew a card. Play it or turn ends.</span>';
             } else {
-                if (turnInstruction) turnInstruction.textContent = 'Play a card or draw from the deck';
+                if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-gamepad"></i><span>Play a card or draw from the deck</span>';
             }
             
             document.body.classList.add('my-turn');
@@ -458,9 +613,10 @@ class UnoClient {
             // Not player's turn
             drawPile.style.cursor = 'not-allowed';
             drawPile.style.opacity = '0.6';
-            drawPile.classList.remove('active');
+            drawPile.classList.remove('glow-effect');
             sayUnoButton.disabled = true;
-            if (turnInstruction) turnInstruction.textContent = `Waiting for ${document.getElementById('currentPlayerName').textContent}`;
+            sayUnoButton.classList.remove('glow');
+            if (turnInstruction) turnInstruction.innerHTML = `<i class="fas fa-clock"></i><span>Waiting for ${document.getElementById('currentPlayerName').textContent}</span>`;
             document.body.classList.remove('my-turn');
         }
     }
@@ -474,19 +630,25 @@ class UnoClient {
             if (currentPlayer.hasUno) {
                 unoStatus.textContent = '📢 UNO!';
                 unoStatus.style.color = '#ffd700';
+                unoStatus.classList.add('glow-effect');
             } else {
                 unoStatus.textContent = '';
+                unoStatus.classList.remove('glow-effect');
             }
         }
     }
 
     createCardElement(card, index, isPlayable = false) {
         const cardElement = document.createElement('div');
-        cardElement.className = `hand-card card-${card.color} ${isPlayable ? 'playable' : ''}`;
+        cardElement.className = `hand-card ${card.color} ${isPlayable ? 'playable' : ''}`;
+        
+        const displayValue = this.getCardDisplayValue(card);
+        const symbol = this.getCardSymbol(card);
         
         cardElement.innerHTML = `
             <div class="card-content">
-                <div class="card-value">${this.getCardDisplayValue(card)}</div>
+                ${symbol ? `<div class="card-symbol">${symbol}</div>` : ''}
+                <div class="card-value">${displayValue}</div>
                 ${card.side ? `<div class="card-side">${card.side.charAt(0).toUpperCase()}</div>` : ''}
             </div>
         `;
@@ -494,13 +656,32 @@ class UnoClient {
         cardElement.title = `${card.color} ${card.value} (${card.side} side)`;
         
         if (isPlayable && !this.waitingForColorChoice) {
-            cardElement.addEventListener('click', () => this.playCard(index, card));
+            cardElement.style.cursor = 'pointer';
+            cardElement.addEventListener('click', () => this.playCardWithAnimation(index, card));
         } else {
             cardElement.style.cursor = 'default';
-            cardElement.style.opacity = '0.7';
+            cardElement.style.opacity = '0.6';
         }
         
         return cardElement;
+    }
+
+    getCardSymbol(card) {
+        if (!card || !card.value) return '';
+        
+        const symbols = {
+            'skip': '⏭️',
+            'reverse': '🔄',
+            'draw2': '+2',
+            'draw5': '+5',
+            'wild': '🌈',
+            'wilddraw4': 'W+4',
+            'wilddrawcolor': 'W+Color',
+            'flip': '🃏',
+            'skipeveryone': '⏩'
+        };
+        
+        return symbols[card.value] || '';
     }
 
     getCardDisplayValue(card) {
@@ -511,11 +692,15 @@ class UnoClient {
         if (card.value === 'skip') return 'SKIP';
         if (card.value === 'reverse') return 'REV';
         if (card.value === 'draw2') return '+2';
+        if (card.value === 'draw5') return '+5';
+        if (card.value === 'wilddraw4') return 'W+4';
+        if (card.value === 'wilddrawcolor') return 'W+Color';
+        if (card.value === 'skipeveryone') return 'SKIP ALL';
         return card.value;
     }
 
-    // Game Actions
-    playCard(cardIndex, card) {
+    // Game Actions with Animations
+    playCardWithAnimation(cardIndex, card) {
         if (!this.isMyTurn) {
             this.showMessage("It's not your turn!", 'error');
             return;
@@ -531,13 +716,29 @@ class UnoClient {
             return;
         }
 
-        console.log(`🎯 Attempting to play ${card.color} ${card.value} at index ${cardIndex}`);
+        console.log(`🎯 Playing ${card.color} ${card.value} at index ${cardIndex}`);
 
-        this.socket.emit('playCard', {
-            roomCode: this.roomCode,
-            cardIndex: cardIndex,
-            playerId: this.playerId
-        });
+        // Animate card playing
+        const cardElement = document.querySelectorAll('.hand-card')[cardIndex];
+        if (cardElement) {
+            cardElement.classList.add('card-play-animation');
+            
+            // Send play command after animation starts
+            setTimeout(() => {
+                this.socket.emit('playCard', {
+                    roomCode: this.roomCode,
+                    cardIndex: cardIndex,
+                    playerId: this.playerId
+                });
+            }, 300);
+        } else {
+            // Fallback without animation
+            this.socket.emit('playCard', {
+                roomCode: this.roomCode,
+                cardIndex: cardIndex,
+                playerId: this.playerId
+            });
+        }
     }
 
     drawCard() {
@@ -547,7 +748,7 @@ class UnoClient {
         }
 
         if (this.hasDrawnCard) {
-            this.showMessage("You already drew a card this turn. Play it or end your turn.", 'warning');
+            this.showMessage("You already drew a card this turn.", 'warning');
             return;
         }
 
@@ -563,13 +764,18 @@ class UnoClient {
 
         console.log('Drawing a card');
 
+        // Animate draw pile
+        const drawPile = document.getElementById('drawPile');
+        if (drawPile) {
+            drawPile.classList.add('draw-animation');
+            setTimeout(() => drawPile.classList.remove('draw-animation'), 1000);
+        }
+
         this.socket.emit('drawCard', {
             roomCode: this.roomCode,
             playerId: this.playerId
         });
     }
-
-    // endTurn removed; draw auto-ends the turn
 
     sayUno() {
         if (!this.roomCode) {
@@ -585,15 +791,21 @@ class UnoClient {
 
         console.log('Calling UNO!');
 
+        // Animate UNO button
+        const unoButton = document.getElementById('sayUno');
+        if (unoButton) {
+            unoButton.classList.add('uno-call-animation');
+            setTimeout(() => unoButton.classList.remove('uno-call-animation'), 1500);
+        }
+
         this.socket.emit('sayUno', {
             roomCode: this.roomCode,
             playerId: this.playerId
         });
     }
 
-    flipDeck() {
-        // This would be handled by playing a FLIP card in UNO Flip
-        this.showMessage('Play a FLIP card to flip the game!', 'info');
+    showFlipInfo() {
+        this.showMessage(`The game is currently on the ${this.currentSide} side. Play a FLIP card to switch sides!`, 'info');
     }
 
     chooseWildColor(color) {
@@ -614,14 +826,10 @@ class UnoClient {
         this.showMessage(`You chose ${color}`, 'info');
     }
 
-    // Event Handlers for new events
+    // Event Handlers
     onChooseColor(data) {
         this.showMessage('Choose a color for your wild card!', 'info');
         this.showColorModal();
-    }
-
-    onDrawnCardPlayable(data) {
-        this.showMessage('You drew a playable card! You can play it or end your turn.', 'info');
     }
 
     onGameMessage(data) {
@@ -630,102 +838,150 @@ class UnoClient {
 
     onDrawUntilColor(data) {
         if (data.playerId === this.playerId) {
-            // Show animation for the player who drew
-            this.animateDrawUntilColor(data.cards, data.targetColor);
             this.showMessage(`You drew ${data.cards.length} cards until you got ${data.targetColor}!`, 'info');
         } else {
-            // Show message for other players
             this.showMessage(`${data.playerName} drew until they got a ${data.targetColor} card`, 'info');
         }
     }
 
-    animateDrawUntilColor(cards, targetColor) {
-        // Create animation container if it doesn't exist
-        let animationContainer = document.getElementById('drawAnimationContainer');
-        if (!animationContainer) {
-            animationContainer = document.createElement('div');
-            animationContainer.id = 'drawAnimationContainer';
-            animationContainer.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                z-index: 2000;
-                background: rgba(0, 0, 0, 0.8);
-                padding: 20px;
-                border-radius: 10px;
-                color: white;
-                text-align: center;
-            `;
-            document.body.appendChild(animationContainer);
+    onPlayerTurn(data) {
+        this.isMyTurn = data.playerId === this.playerId;
+        this.hasDrawnCard = false;
+        this.waitingForColorChoice = false;
+        this.updateTurnIndicator();
+        
+        if (data.playerId === this.playerId) {
+            this.showMessage('🎯 Your turn! Play a matching card or draw from deck.', 'success');
+        } else {
+            this.showMessage(`⏳ ${data.playerName}'s turn`, 'info');
         }
+    }
 
-        animationContainer.innerHTML = `
-            <h3>Drawing until ${targetColor}...</h3>
-            <div id="drawingCards" style="display: flex; gap: 10px; justify-content: center; margin: 20px 0;"></div>
-            <p id="drawProgress">Drawing card 1 of ${cards.length}...</p>
-        `;
+    onCardPlayed(data) {
+        if (data.playerName !== this.playerName) {
+            if (data.waitingForColor) {
+                this.showMessage(`${data.playerName} played a wild card and is choosing color...`, 'info');
+            } else {
+                this.showMessage(`${data.playerName} played a ${data.card.color} ${data.card.value}`, 'info');
+            }
+        }
+    }
 
-        const drawingCards = document.getElementById('drawingCards');
-        const drawProgress = document.getElementById('drawProgress');
+    onCardDrawn(data) {
+        if (data.playerId === this.playerId) {
+            this.hasDrawnCard = true;
+            if (data.penaltyApplied) {
+                this.showMessage(`You drew ${data.penaltyCount} penalty cards!`, 'warning');
+            } else {
+                this.showMessage('You drew a card', 'info');
+            }
+            this.updateTurnIndicator();
+        } else {
+            if (data.penaltyApplied) {
+                this.showMessage(`${data.playerName} drew ${data.penaltyCount} penalty cards!`, 'info');
+            } else {
+                this.showMessage(`${data.playerName} drew a card`, 'info');
+            }
+        }
+    }
 
-        // Animate each card being drawn
-        cards.forEach((card, index) => {
-            setTimeout(() => {
-                const cardElement = document.createElement('div');
-                cardElement.className = `card card-${card.color || 'wild'}`;
-                cardElement.style.cssText = `
-                    width: 60px;
-                    height: 90px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    animation: drawCard 0.5s ease-in-out;
-                `;
-                cardElement.textContent = this.getCardDisplayValue(card);
-                drawingCards.appendChild(cardElement);
-                
-                drawProgress.textContent = `Drawing card ${index + 1} of ${cards.length}...`;
-                
-                if (index === cards.length - 1) {
-                    setTimeout(() => {
-                        animationContainer.remove();
-                        this.showMessage(`Found ${targetColor} card!`, 'success');
-                    }, 1000);
-                }
-            }, index * 500); // 500ms delay between each card
+    onUnoCalled(data) {
+        this.showMessage(`📢 ${data.playerName} says UNO!`, 'success');
+        
+        // Add visual effect to UNO call
+        const unoElements = document.querySelectorAll('.uno-indicator');
+        unoElements.forEach(el => {
+            el.classList.add('uno-call-animation');
+            setTimeout(() => el.classList.remove('uno-call-animation'), 1500);
         });
+    }
 
-        // Add CSS animation for card drawing
-        if (!document.getElementById('drawCardAnimation')) {
-            const style = document.createElement('style');
-            style.id = 'drawCardAnimation';
-            style.textContent = `
-                @keyframes drawCard {
-                    0% { 
-                        transform: translateY(-100px) rotate(-10deg); 
-                        opacity: 0; 
-                    }
-                    50% { 
-                        transform: translateY(-50px) rotate(5deg); 
-                        opacity: 0.7; 
-                    }
-                    100% { 
-                        transform: translateY(0) rotate(0deg); 
-                        opacity: 1; 
-                    }
+    onGameFlipped(data) {
+        this.showMessage(`🔄 Game flipped to ${data.newSide} side!`, 'warning');
+        
+        // Add flip animation to cards
+        const cards = document.querySelectorAll('.hand-card, .uno-card');
+        cards.forEach(card => {
+            card.classList.add('flip-animation');
+            setTimeout(() => card.classList.remove('flip-animation'), 600);
+        });
+    }
+
+    onWildColorChosen(data) {
+        this.showMessage(`${data.playerName} chose ${data.color}`, 'info');
+    }
+
+    onGameOver(data) {
+        this.switchScreen('gameOver');
+        
+        const winnerMessage = document.getElementById('winnerMessage');
+        if (winnerMessage) {
+            if (data.winner) {
+                winnerMessage.textContent = `🎉 ${data.winner.name} wins the game!`;
+                if (data.winner.id === this.playerId) {
+                    this.showMessage('🏆 Congratulations! You won the game!', 'success');
+                } else {
+                    this.showMessage(`🥈 ${data.winner.name} won the game. Better luck next time!`, 'info');
                 }
-            `;
-            document.head.appendChild(style);
+            } else {
+                winnerMessage.textContent = 'Game ended!';
+            }
         }
+        
+        // Calculate game statistics
+        this.updateGameStats();
+        
+        // Reset game state
+        this.isMyTurn = false;
+        this.hasDrawnCard = false;
+        this.waitingForColorChoice = false;
+    }
+
+    updateGameStats() {
+        const duration = this.gameStartTime ? Math.round((new Date() - this.gameStartTime) / 60000) : 0;
+        document.getElementById('statDuration').textContent = `${duration}m`;
+        
+        // These would ideally come from server data
+        document.getElementById('statPlayers').textContent = '?';
+        document.getElementById('statCards').textContent = '?';
+    }
+
+    onPlayerLeft(data) {
+        this.showMessage(`👋 ${data.playerName} left the game`, 'warning');
+    }
+
+    returnToLobby() {
+        this.switchScreen('lobby');
+        this.showMessage('Returned to lobby', 'info');
+        
+        // Reset game state
+        this.isMyTurn = false;
+        this.hasDrawnCard = false;
+        this.waitingForColorChoice = false;
+        this.gameStartTime = null;
+        
+        // Clear any modals
+        this.hideColorModal();
+    }
+
+    playAgain() {
+        if (!this.roomCode) {
+            this.showMessage('Not in a game room', 'error');
+            return;
+        }
+
+        this.socket.emit('playAgain', {
+            roomCode: this.roomCode,
+            playerId: this.playerId
+        });
+        
+        this.showMessage('Starting new game...', 'info');
     }
 
     // Color Modal Methods
     showColorModal() {
         const modal = document.getElementById('colorModal');
         if (modal) {
-            // Rebuild options based on current side
             const side = (this.currentSide || 'light') === 'dark' ? 'dark' : 'light';
             if (typeof this.setWildColorOptions === 'function') {
                 this.setWildColorOptions(side);
@@ -742,182 +998,57 @@ class UnoClient {
         this.waitingForColorChoice = false;
     }
 
-    // Existing Event Handlers (updated)
-    onPlayerTurn(data) {
-        this.isMyTurn = data.playerId === this.playerId;
-        this.hasDrawnCard = false; // Reset drawn card state on new turn
-        this.waitingForColorChoice = false; // Reset color choice state
-        this.updateTurnIndicator();
-        
-        if (data.playerId === this.playerId) {
-            this.showMessage('Your turn! Play a matching card or draw from deck.', 'success');
-        } else {
-            this.showMessage(`${data.playerName}'s turn`, 'info');
-        }
-    }
-
-    onCardPlayed(data) {
-        if (data.playerName !== this.playerName) {
-            if (data.waitingForColor) {
-                this.showMessage(`${data.playerName} played a wild card and is choosing color...`, 'info');
-            } else {
-                this.showMessage(`${data.playerName} played a card`, 'info');
-            }
-        }
-    }
-
-    onCardDrawn(data) {
-        // Update local state if it's our draw
-        if (data.playerId === this.playerId) {
-            this.hasDrawnCard = true;
-            if (data.canPlay) {
-                this.showMessage('You drew a playable card! You can play it or end your turn.', 'info');
-            } else {
-                this.showMessage('You drew a card. Play it or end your turn.', 'info');
-            }
-            this.updateTurnIndicator(); // Refresh UI
-        } else {
-            this.showMessage(`${data.playerName} drew a card`, 'info');
-        }
-    }
-
-    onUnoCalled(data) {
-        this.showMessage(`${data.playerName} says UNO!`, 'success');
-    }
-
-    onGameFlipped(data) {
-        this.showMessage(`Game flipped to ${data.newSide} side!`, 'warning');
-    }
-
-    onWildColorChosen(data) {
-        this.showMessage(`${data.playerName} chose ${data.color}`, 'info');
-    }
-
-    onGameOver(data) {
-        this.switchScreen('gameOver');
-        const winnerMessage = document.getElementById('winnerMessage');
-        if (winnerMessage && data.winner) {
-            winnerMessage.textContent = `${data.winner.name} wins the game!`;
-        }
-        this.showMessage(`Game over! ${data.winner.name} wins!`, 'success');
-        
-        // Reset game state
-        this.isMyTurn = false;
-        this.hasDrawnCard = false;
-        this.waitingForColorChoice = false;
-    }
-
-    onPlayerLeft(data) {
-        this.showMessage(`${data.playerName} left the game`, 'warning');
-    }
-
-    returnToLobby() {
-        this.switchScreen('lobby');
-        this.showMessage('Returned to lobby', 'info');
-        
-        // Reset game state
-        this.isMyTurn = false;
-        this.hasDrawnCard = false;
-        this.waitingForColorChoice = false;
-        
-        // Clear any modals
-        this.hideColorModal();
-    }
-
-    playAgain() {
-        if (!this.roomCode) {
-            this.showMessage('Not in a game room', 'error');
-            return;
-        }
-
-        this.socket.emit('playAgain', {
-            roomCode: this.roomCode,
-            playerId: this.playerId
-        });
-    }
-
     // Utility Methods
     switchScreen(screenName) {
-        // Hide all screens
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
         });
         
-        // Show target screen
         const targetScreen = document.getElementById(screenName);
         if (targetScreen) {
             targetScreen.classList.add('active');
         }
 
-        // Remove any color choice dialogs
         this.hideColorModal();
     }
 
     showMessage(message, type = 'info') {
         console.log(`[${type}] ${message}`);
         
-        // Create or get message container
-        let messageContainer = document.getElementById('messageContainer');
-        if (!messageContainer) {
-            messageContainer = document.createElement('div');
-            messageContainer.id = 'messageContainer';
-            messageContainer.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                z-index: 1000;
-                max-width: 300px;
-            `;
-            document.body.appendChild(messageContainer);
-        }
+        const notificationContainer = document.getElementById('notificationContainer');
+        if (!notificationContainer) return;
 
-        // Create message element
-        const messageElement = document.createElement('div');
-        messageElement.className = `message message-${type}`;
-        messageElement.textContent = message;
-        messageElement.style.cssText = `
-            padding: 12px 16px;
-            margin: 8px 0;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-            background: ${this.getMessageColor(type)};
-            animation: slideInRight 0.3s ease;
-            box-shadow: var(--shadow);
-            border-left: 4px solid ${this.getMessageBorderColor(type)};
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        
+        const icons = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        };
+        
+        notification.innerHTML = `
+            <i class="${icons[type] || icons.info}"></i>
+            <span>${message}</span>
         `;
 
-        messageContainer.appendChild(messageElement);
+        notificationContainer.appendChild(notification);
 
-        // Remove message after 4 seconds
+        // Remove notification after 5 seconds
         setTimeout(() => {
-            if (messageElement.parentNode) {
-                messageElement.parentNode.removeChild(messageElement);
+            if (notification.parentNode) {
+                notification.style.animation = 'slideInRight 0.4s reverse';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 400);
             }
-        }, 4000);
+        }, 5000);
     }
 
-    getMessageColor(type) {
-        const colors = {
-            success: '#4CAF50',
-            error: '#f44336',
-            warning: '#ff9800',
-            info: '#2196F3'
-        };
-        return colors[type] || colors.info;
-    }
-
-    getMessageBorderColor(type) {
-        const colors = {
-            success: '#388E3C',
-            error: '#D32F2F',
-            warning: '#F57C00',
-            info: '#1976D2'
-        };
-        return colors[type] || colors.info;
-    }
-
-    // Debug method to show current state
+    // Debug method
     debugState() {
         console.log('=== CLIENT STATE ===');
         console.log(`Player: ${this.playerName} (${this.playerId})`);
@@ -925,210 +1056,15 @@ class UnoClient {
         console.log(`My Turn: ${this.isMyTurn}`);
         console.log(`Has Drawn: ${this.hasDrawnCard}`);
         console.log(`Waiting for Color: ${this.waitingForColorChoice}`);
-        
-        // Add card matching debug
-        this.debugCardMatching();
+        console.log(`Current Side: ${this.currentSide}`);
         console.log('===================');
     }
-
-    // Add this method to help debug card matching
-    debugCardMatching() {
-        const game = window.game; // Reference to the game instance if available
-        if (!game) {
-            console.log('Game instance not available');
-            return;
-        }
-
-        const topCard = game.discardPile[game.discardPile.length - 1];
-        const playerHand = game.getPlayerHand(this.playerId);
-        
-        console.log('=== CARD MATCHING DEBUG ===');
-        console.log(`Top card: ${topCard.color} ${topCard.value}`);
-        console.log('Your hand:');
-        
-        playerHand.forEach((card, index) => {
-            const canPlay = game.canPlayCard(card, topCard);
-            console.log(`[${index}] ${card.color} ${card.value} - Playable: ${canPlay}`);
-        });
-        console.log('==========================');
-    }
 }
-
-// Add CSS animations for messages and other elements
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-    
-    .my-turn .player-area {
-        border: 3px solid #4CAF50;
-        border-radius: 10px;
-        padding: 10px;
-        background: rgba(76, 175, 80, 0.1);
-    }
-    
-    .current-turn {
-        border: 2px solid #FFD700 !important;
-        animation: pulse 2s infinite;
-    }
-    
-    .uno-indicator {
-        color: #FFD700;
-        font-weight: bold;
-        animation: blink 1s infinite;
-        margin-top: 5px;
-    }
-    
-    .host-indicator, .you-indicator {
-        margin-top: 5px;
-        font-size: 0.9em;
-        padding: 2px 6px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.2);
-    }
-    
-    .host-badge, .you-badge {
-        font-size: 0.8em;
-        padding: 2px 6px;
-        border-radius: 10px;
-        background: rgba(255, 215, 0, 0.2);
-    }
-    
-    @keyframes blink {
-        50% { opacity: 0.5; }
-    }
-    
-    .playable {
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    .playable:hover {
-        transform: translateY(-10px) scale(1.05);
-        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
-    }
-    
-    .card-wild {
-        background: linear-gradient(135deg, #2f3640, #7f8fa6) !important;
-        color: white;
-    }
-    
-    .card-red { background: linear-gradient(135deg, #ff6b6b, #c23616) !important; color: white; }
-    .card-blue { background: linear-gradient(135deg, #4834d4, #0652DD) !important; color: white; }
-    .card-green { background: linear-gradient(135deg, #00d2d3, #009432) !important; color: white; }
-    .card-yellow { background: linear-gradient(135deg, #fbc531, #e1b12c) !important; color: black; }
-    
-    /* Improve card text visibility */
-    .hand-card, .card {
-        font-weight: bold;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        word-break: break-word;
-        padding: 5px;
-    }
-    
-    .card-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 5px;
-    }
-    
-    .card-value {
-        font-size: 1.1em;
-        font-weight: 800;
-    }
-    
-    .card-side {
-        font-size: 0.7em;
-        opacity: 0.8;
-        background: rgba(0, 0, 0, 0.2);
-        padding: 1px 4px;
-        border-radius: 3px;
-    }
-    
-    /* Turn instruction styling */
-    .turn-instruction {
-        padding: 10px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 5px;
-        font-size: 14px;
-        text-align: center;
-        margin-top: 10px;
-        min-height: 20px;
-    }
-    
-    .deck.active {
-        animation: pulse 1.5s infinite;
-        cursor: pointer;
-    }
-    
-    /* Improve button states */
-    .game-controls button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none !important;
-    }
-    
-    .game-controls button:not(:disabled):hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    }
-    
-    /* Player badges in lobby */
-    .player-badge {
-        display: flex;
-        gap: 5px;
-        font-size: 0.8em;
-    }
-    
-    .host-badge {
-        background: rgba(255, 215, 0, 0.2);
-        color: #ffd700;
-    }
-    
-    .you-badge {
-        background: rgba(76, 175, 80, 0.2);
-        color: #4CAF50;
-    }
-    
-    /* Responsive improvements */
-    @media (max-width: 768px) {
-        #messageContainer {
-            top: 10px;
-            right: 10px;
-            left: 10px;
-            max-width: none;
-        }
-        
-        .message {
-            font-size: 14px;
-            padding: 10px 12px;
-        }
-        
-        .color-option {
-            padding: 15px 10px !important;
-            font-size: 12px;
-        }
-    }
-`;
-document.head.appendChild(style);
 
 // Initialize the client when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     window.unoClient = new UnoClient();
-    console.log('UNO Flip client initialized');
+    console.log('🎮 UNO Flip client initialized with enhanced UI');
     
     // Add debug helper to global scope
     window.debugUno = () => {
@@ -1136,4 +1072,11 @@ document.addEventListener('DOMContentLoaded', () => {
             window.unoClient.debugState();
         }
     };
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'd' || e.key === 'D') {
+            window.debugUno();
+        }
+    });
 });

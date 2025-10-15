@@ -327,7 +327,14 @@ class UnoGame {
         }
 
         // Move to next turn if not already handled by special card
+        // FIXED: Reverse card in 3+ players should NOT give another turn to current player
         if (!['skip', 'reverse', 'draw2'].includes(playedCard.value)) {
+            this.nextTurn();
+        } else if (playedCard.value === 'reverse' && this.players.length === 2) {
+            // Only in 2-player mode, reverse acts as skip (current player plays again)
+            // Do nothing - current player keeps turn
+        } else {
+            // For skip, draw2, and reverse in 3+ players, move to next turn
             this.nextTurn();
         }
 
@@ -382,15 +389,14 @@ class UnoGame {
         switch (card.value) {
             case 'skip':
                 console.log(`⏭️  Skipping next player`);
-                this.nextTurn();
+                // Skip is handled in playCard method - turn advances
                 break;
             case 'reverse':
                 this.direction *= -1;
                 console.log(`🔄 Reversing direction to: ${this.direction}`);
-                if (this.players.length === 2) {
-                    // In 2-player game, reverse acts as skip
-                    this.nextTurn();
-                }
+                // FIXED: Reverse behavior is now handled in playCard method
+                // In 2-player: current player keeps turn (acts as skip)
+                // In 3+ players: turn advances to previous player
                 break;
             case 'draw2':
                 this.nextTurn();
@@ -511,8 +517,17 @@ class UnoGame {
     nextTurn() {
         this.hasDrawnCard = false;
         this.waitingForColorChoice = false;
-        this.currentPlayerIndex = (this.currentPlayerIndex + this.direction + this.players.length) % this.players.length;
-        console.log(`↪️  Turn passed to: ${this.currentPlayer.name}`);
+        
+        // FIXED: Calculate next player index considering direction
+        let nextIndex = (this.currentPlayerIndex + this.direction) % this.players.length;
+        
+        // Handle negative indices (when direction is -1)
+        if (nextIndex < 0) {
+            nextIndex = this.players.length - 1;
+        }
+        
+        this.currentPlayerIndex = nextIndex;
+        console.log(`↪️  Turn passed to: ${this.currentPlayer.name} (direction: ${this.direction})`);
     }
 
     sayUno(playerId) {

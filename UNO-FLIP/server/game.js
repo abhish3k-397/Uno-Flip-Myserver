@@ -339,8 +339,18 @@ class UnoGame {
             };
         }
 
-        // Move to next turn if not already handled by special card
+        // FIXED: Move to next turn if not already handled by special card
+        // Reverse card in 3+ players should NOT give another turn to current player
         if (!['skip', 'reverse', 'draw2', 'skipeveryone', 'draw5'].includes(cardSideProps.value)) {
+            this.nextTurn();
+        } else if (cardSideProps.value === 'reverse' && this.players.length === 2) {
+            // Only in 2-player mode, reverse acts as skip (current player plays again)
+            // Do nothing - current player keeps turn
+        } else if (cardSideProps.value === 'skipeveryone') {
+            // Dark side skip everyone: current player plays again
+            // Do nothing - current player keeps turn
+        } else {
+            // For skip, draw2, draw5, and reverse in 3+ players, move to next turn
             this.nextTurn();
         }
 
@@ -423,20 +433,19 @@ class UnoGame {
                     // Skip returns turn to the one who played it
                     // Do nothing, current player plays again
                 } else {
-                    this.nextTurn();
+                    // Skip advances turn (handled in playCard)
                 }
                 break;
             case 'reverse':
                 this.direction *= -1;
-                if (this.players.length === 2) {
-                    // Reverse returns turn to the one who played it
-                    // Do nothing, current player plays again
-                }
+                // FIXED: Reverse behavior is now handled in playCard method
+                // In 2-player: current player keeps turn (acts as skip)
+                // In 3+ players: turn advances to previous player
                 break;
             case 'draw2':
                 // Start or add to stacking penalty, pass turn to next player to allow stacking
                 this.pendingDrawCount += 2;
-                this.nextTurn();
+                // Turn advance handled in playCard
                 break;
             case 'wilddraw4':
                 // Wild draw 4 adds 4 to penalty and requires color choice
@@ -450,12 +459,12 @@ class UnoGame {
                 break;
             case 'skipeveryone':
                 // Dark side skip everyone: all other players lose a turn, current player plays again
-                // Do not advance turn; keep current player
+                // Do not advance turn; keep current player (handled in playCard)
                 break;
             case 'draw5':
                 // Start or add to stacking penalty for dark side, then pass turn
                 this.pendingDrawCount += 5;
-                this.nextTurn();
+                // Turn advance handled in playCard
                 break;
             case 'flip':
                 this.flipGame();
@@ -584,8 +593,16 @@ class UnoGame {
     }
 
     nextTurn() {
-        this.currentPlayerIndex = (this.currentPlayerIndex + this.direction + this.players.length) % this.players.length;
-        console.log(`↪️  Turn passed to: ${this.currentPlayer.name}`);
+        // FIXED: Calculate next player index considering direction
+        let nextIndex = (this.currentPlayerIndex + this.direction) % this.players.length;
+        
+        // Handle negative indices (when direction is -1)
+        if (nextIndex < 0) {
+            nextIndex = this.players.length - 1;
+        }
+        
+        this.currentPlayerIndex = nextIndex;
+        console.log(`↪️  Turn passed to: ${this.currentPlayer.name} (direction: ${this.direction})`);
     }
 
     sayUno(playerId) {
