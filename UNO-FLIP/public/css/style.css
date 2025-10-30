@@ -94,18 +94,15 @@ body {
 .icon-btn:active { transform: scale(0.98); }
 
 .game-info-top {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+    display: inline;
     margin-left: 20px;
 }
 
 .info-item.top {
+    display: inline;
+    margin-right: 15px;
     font-size: 1.1em;
     color: var(--text-muted);
-    background: none;
-    padding: 0;
-    border: none;
 }
 
 .info-item.top .value {
