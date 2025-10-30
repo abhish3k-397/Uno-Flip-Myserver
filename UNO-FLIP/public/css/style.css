@@ -4,6 +4,11 @@
     box-sizing: border-box;
 }
 
+#endTurn {
+    margin-top: 20px;
+    align-self: center;
+}
+
 :root {
     --primary-color: #3b82f6;
     --primary-dark: #2563eb;
