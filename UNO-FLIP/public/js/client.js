@@ -948,7 +948,7 @@ class UnoClient {
         if (players && players.length > 0) {
             players.forEach((player, index) => {
                 const playerSpan = document.createElement('span');
-                playerSpan.textContent = `${player.name}: ${player.handCount}`;
+                playerSpan.innerHTML = `${player.name}: <span class="value">${player.handCount}</span>`;
 
                 if (player.id === currentPlayerId) {
                     playerSpan.classList.add('current-turn');
