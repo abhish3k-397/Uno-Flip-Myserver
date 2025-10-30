@@ -866,7 +866,7 @@ class UnoClient {
     // Clear any pending play when we receive authoritative state
     this.pendingPlay = null;
         
-        document.getElementById('currentPlayerName').textContent = data.currentPlayerName || 'Unknown';
+        this.updatePlayerTurnList(data.players, data.currentPlayerId);
         document.getElementById('deckCount').textContent = data.deckCount || 0;
         document.getElementById('deckCountBadge').textContent = data.deckCount || 0;
         
@@ -937,6 +937,33 @@ class UnoClient {
         if (card.color === topColor) return true;
         if (card.value === topCard.value) return true;
         return false;
+    }
+
+    updatePlayerTurnList(players, currentPlayerId) {
+        const playerTurnList = document.getElementById('player-turn-list');
+        if (!playerTurnList) return;
+
+        playerTurnList.innerHTML = ''; // Clear the list
+
+        if (players && players.length > 0) {
+            players.forEach((player, index) => {
+                const playerSpan = document.createElement('span');
+                playerSpan.textContent = `${player.name}: ${player.handCount}`;
+
+                if (player.id === currentPlayerId) {
+                    playerSpan.classList.add('current-turn');
+                }
+
+                playerTurnList.appendChild(playerSpan);
+
+                if (index < players.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'separator';
+                    separator.textContent = '|';
+                    playerTurnList.appendChild(separator);
+                }
+            });
+        }
     }
 
     updateOpponents(players, currentPlayerIndex) {

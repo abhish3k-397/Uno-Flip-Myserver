@@ -112,8 +112,13 @@ body {
     color: var(--text-strong);
 }
 
-.turn-indicator-top {
-    font-weight: 600;
+#player-turn-list .separator {
+    margin: 0 10px;
+    color: var(--text-muted);
+}
+
+#player-turn-list .current-turn {
+    font-weight: 700;
     color: var(--primary-color);
 }
 
