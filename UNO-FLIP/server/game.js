@@ -339,6 +339,24 @@ class UnoGame {
 
         // Check for win
         if (player.hand.length === 0) {
+            const isPowerCard = ['skip', 'reverse', 'draw1', 'flip', 'wild', 'wilddraw2', 'skipeveryone', 'draw5', 'wilddrawcolor'].includes(cardSideProps.value);
+            if (isPowerCard) {
+                // Player cannot win with a power card, return the card to their hand and force them to draw
+                player.hand.push(playedCard);
+                const drawnCard = this.drawCard();
+                player.hand.push(drawnCard);
+                player.hasUno = false;
+                this.discardPile.pop(); // Remove the card from the discard pile
+                this.lastPlayed[this.currentSide] = this.getRawTopCard(); // Reset last played card
+
+                return {
+                    success: false,
+                    message: "You cannot win with a power card! You drew a card instead.",
+                    gameOver: false,
+                    playedCard: null,
+                    requiresColorChoice: false
+                };
+            }
             this.gameOver = true;
             return { 
                 success: true, 
