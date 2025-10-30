@@ -211,8 +211,8 @@ class UnoGame {
 
     // Game Flow
     startGame() {
-        if (this.players.length < 2) {
-            throw new Error('Need at least 2 players to start');
+        if (this.players.length < 1) {
+            throw new Error('Need at least 1 players to start');
         }
 
         if (this.gameStarted) {
@@ -668,6 +668,7 @@ class UnoGame {
     }
 
     nextTurn() {
+        if (this.players.length === 0) return;
         // FIXED: Calculate next player index considering direction
         let nextIndex = (this.currentPlayerIndex + this.direction) % this.players.length;
         
@@ -690,10 +691,30 @@ class UnoGame {
 
     // Getters
     get currentPlayer() {
+        if (this.players.length === 0) return null;
         return this.players[this.currentPlayerIndex];
     }
 
     get gameState() {
+        if (this.players.length === 0 || !this.currentPlayer) {
+            return {
+                players: [],
+                currentPlayerId: null,
+                currentPlayerName: null,
+                currentPlayerIndex: 0,
+                currentSide: this.currentSide,
+                topCard: null,
+                deckCount: this.deck.length,
+                direction: this.direction,
+                gameStarted: this.gameStarted,
+                gameOver: this.gameOver,
+                roomCode: this.roomCode,
+                waitingForColorChoice: false,
+                hasDrawnCard: false,
+                pendingDrawCount: 0,
+                drawUntilColor: null
+            };
+        }
         const topCardRaw = this.discardPile.length > 0 ? this.discardPile[this.discardPile.length - 1] : null;
         const topCard = topCardRaw ? {
             color: (this.currentSide === 'light' ? topCardRaw.light.color : topCardRaw.dark.color),

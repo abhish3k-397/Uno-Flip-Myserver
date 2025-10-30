@@ -18,25 +18,65 @@ class UnoClient {
         this.initializeEventListeners();
         this.initializeColorModal();
         this.addCardStyles();
-        this.createEndTurnButton();
+        this.createActionButtons();
     }
 
-    createEndTurnButton() {
-        const container = document.querySelector('.game-controls-top');
-        if (!container) return;
-        // Avoid duplicate
-        if (document.getElementById('endTurn')) return;
+    showRules() {
+        const rulesModal = document.getElementById('rulesModal');
+        if (rulesModal) {
+            rulesModal.style.display = 'flex';
+            setTimeout(() => {
+                rulesModal.classList.add('show');
+            }, 10);
+        }
+    }
 
-        const endBtn = document.createElement('button');
-        endBtn.id = 'endTurn';
-        endBtn.className = 'btn btn-secondary';
-        endBtn.textContent = 'End Turn';
-        endBtn.disabled = true;
-        endBtn.style.marginLeft = '8px';
-        endBtn.addEventListener('click', () => this.endTurn());
+    hideRules() {
+        const rulesModal = document.getElementById('rulesModal');
+        if (rulesModal) {
+            rulesModal.classList.remove('show');
+            setTimeout(() => {
+                rulesModal.style.display = 'none';
+            }, 300);
+        }
+    }
 
-        container.appendChild(endBtn);
-        this.endTurnButton = endBtn;
+    createActionButtons() {
+        // End Turn Button
+        const playerArea = document.querySelector('.player-area');
+        if (playerArea && !document.getElementById('endTurn')) {
+            const endBtn = document.createElement('button');
+            endBtn.id = 'endTurn';
+            endBtn.className = 'btn btn-secondary';
+            endBtn.innerHTML = '<i class="fas fa-forward"></i> End Turn';
+            endBtn.disabled = true;
+            playerArea.appendChild(endBtn);
+            endBtn.addEventListener('click', () => this.endTurn());
+            this.endTurnButton = endBtn;
+        }
+
+        // UNO Button
+        if (playerArea && !document.getElementById('sayUno')) {
+            const unoBtn = document.createElement('button');
+            unoBtn.id = 'sayUno';
+            unoBtn.className = 'btn btn-uno glow';
+            unoBtn.innerHTML = '<i class="fas fa-bullhorn"></i> UNO!';
+            unoBtn.disabled = true;
+            playerArea.appendChild(unoBtn);
+            unoBtn.addEventListener('click', () => this.sayUno());
+        }
+
+        // Rules Button
+        const topBarRight = document.querySelector('.topbar-right');
+        if (topBarRight && !document.getElementById('rulesBtn')) {
+            const rulesBtn = document.createElement('button');
+            rulesBtn.id = 'rulesBtn';
+            rulesBtn.className = 'icon-btn';
+            rulesBtn.innerHTML = '<i class="fas fa-info-circle"></i>';
+            rulesBtn.title = 'Show Rules';
+            topBarRight.insertBefore(rulesBtn, topBarRight.firstChild);
+            rulesBtn.addEventListener('click', () => this.showRules());
+        }
     }
 
     addCardStyles() {
@@ -140,8 +180,6 @@ class UnoClient {
         // Lobby events
         document.getElementById('createGame').addEventListener('click', () => this.createGame());
         document.getElementById('joinGame').addEventListener('click', () => this.joinGame());
-        document.getElementById('sayUno').addEventListener('click', () => this.sayUno());
-        document.getElementById('flipDeck').addEventListener('click', () => this.showFlipInfo());
         document.getElementById('playAgain').addEventListener('click', () => this.playAgain());
 
         // Minimal theme toggle
@@ -175,6 +213,9 @@ class UnoClient {
         document.getElementById('roomCode').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.joinGame();
         });
+
+        // Rules modal close button
+        document.getElementById('closeRules').addEventListener('click', () => this.hideRules());
     }
 
     initializeColorModal() {
@@ -503,7 +544,6 @@ class UnoClient {
     // UPDATED: Update discard pile with proper images
     updateDiscardPile(topCard) {
         const discardPile = document.getElementById('discardPile');
-        const currentTopCard = document.getElementById('currentTopCard');
         
         if (!discardPile) return;
 
@@ -536,29 +576,6 @@ class UnoClient {
             `;
             discardPile.title = `${topCard.color} ${topCard.value} (${topCard.side} side)`;
 
-            // Update the current top card display
-            if (currentTopCard) {
-                // Remove any existing color classes from current top card
-                currentTopCard.className = 'uno-card';
-                // Add the correct color class (use chosenColor if provided)
-                currentTopCard.classList.add(visualColor);
-
-                // Set card image for current top card
-                if (cardImage && cardImage !== this.cardImages.default) {
-                    this.setCardBackground(currentTopCard, cardImage);
-                    currentTopCard.classList.add('image-card');
-                } else {
-                    currentTopCard.classList.remove('image-card');
-                    currentTopCard.style.removeProperty('background-image');
-                }
-
-                currentTopCard.innerHTML = `
-                    <div class="card-content">
-                        ${symbol ? `<div class="card-symbol">${symbol}</div>` : ''}
-                        <div class="card-value">${displayValue}</div>
-                    </div>
-                `;
-            }
         } else {
             // Reset to default state when no top card
             discardPile.className = 'uno-card discard-card';
@@ -569,17 +586,6 @@ class UnoClient {
                 </div>
             `;
             discardPile.title = 'Starting card';
-            
-            if (currentTopCard) {
-                currentTopCard.className = 'current-card';
-                currentTopCard.style.backgroundImage = '';
-                currentTopCard.innerHTML = `
-                    <div class="card-placeholder">
-                        <i class="fas fa-play-circle"></i>
-                        <span>Start Game</span>
-                    </div>
-                `;
-            }
         }
     }
 
@@ -776,7 +782,7 @@ class UnoClient {
         });
 
         // Show start game button if we're the host and have enough players
-        if (data.players && data.players.length >= 2 && data.players[0].id === this.playerId) {
+        if (data.players && data.players.length >= 1 && data.players[0].id === this.playerId) {
             this.showStartGameButton();
         }
     }
