@@ -96,13 +96,16 @@ body {
 .game-info-top {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-left: 25px;
+    gap: 20px;
+    margin-left: 20px;
 }
 
 .info-item.top {
     font-size: 1.1em;
     color: var(--text-muted);
+    background: none;
+    padding: 0;
+    border: none;
 }
 
 .info-item.top .value {
