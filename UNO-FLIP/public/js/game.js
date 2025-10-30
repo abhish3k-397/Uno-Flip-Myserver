@@ -117,11 +117,9 @@ class UnoGame {
             dark,
         });
 
-        // Number cards (0-9)
+        // Number cards (1-9) — NOTE: 0 card removed for Uno Flip variant
         lightColors.forEach((lc, i) => {
             const dc = darkColors[i];
-            // One zero per color
-            this.deck.push(makeCard({ color: lc, value: '0' }, { color: dc, value: '0' }));
             // Two of each 1-9 per color
             for (let n = 1; n <= 9; n++) {
                 this.deck.push(makeCard({ color: lc, value: n.toString() }, { color: dc, value: n.toString() }));
@@ -132,7 +130,7 @@ class UnoGame {
         // Action cards (2 of each per color) including FLIP
         lightColors.forEach((lc, i) => {
             const dc = darkColors[i];
-            const lightActions = ['skip', 'reverse', 'draw2', 'flip'];
+            const lightActions = ['skip', 'reverse', 'draw1', 'flip'];
             const darkActions = ['skipeveryone', 'reverse', 'draw5', 'flip'];
             
             lightActions.forEach((la, idx) => {
@@ -145,7 +143,7 @@ class UnoGame {
         // Wilds (4 of each type)
         for (let i = 0; i < 4; i++) {
             this.deck.push(makeCard({ color: 'wild', value: 'wild' }, { color: 'wild', value: 'wild' }));
-            this.deck.push(makeCard({ color: 'wild', value: 'wilddraw4' }, { color: 'wild', value: 'wilddrawcolor' }));
+            this.deck.push(makeCard({ color: 'wild', value: 'wild' }, { color: 'wild', value: 'wilddrawcolor' }));
         }
 
         this.shuffleDeck();
@@ -361,7 +359,7 @@ class UnoGame {
         }
 
         // Move to next turn if not already handled by special card
-        if (!['skip', 'reverse', 'draw2', 'skipeveryone', 'draw5'].includes(cardSideProps.value)) {
+        if (!['skip', 'reverse', 'draw1', 'skipeveryone', 'draw5'].includes(cardSideProps.value)) {
             this.nextTurn();
         } else if (cardSideProps.value === 'reverse' && this.players.length === 2) {
             // Only in 2-player mode, reverse acts as skip (current player plays again)
@@ -395,9 +393,8 @@ class UnoGame {
 
         // If there is a pending draw penalty, only allow stacking with draw cards
         if (this.pendingDrawCount > 0) {
-            const isStackCard = (cardSideProps.value === 'draw2' && this.currentSide === 'light') ||
+            const isStackCard = (cardSideProps.value === 'draw1' && this.currentSide === 'light') ||
                                 (cardSideProps.value === 'draw5' && this.currentSide === 'dark') ||
-                                (cardSideProps.value === 'wilddraw4' && this.currentSide === 'light') ||
                                 (cardSideProps.value === 'wilddrawcolor' && this.currentSide === 'dark');
             if (isStackCard) {
                 console.log('✅ Stacking draw card allowed');
@@ -443,11 +440,8 @@ class UnoGame {
             case 'reverse':
                 this.direction *= -1;
                 break;
-            case 'draw2':
-                this.pendingDrawCount += 2;
-                break;
-            case 'wilddraw4':
-                this.pendingDrawCount += 4;
+            case 'draw1':
+                this.pendingDrawCount += 1;
                 break;
             case 'wilddrawcolor':
                 // Dark side wild draw color - handled in handleWildColorChoice

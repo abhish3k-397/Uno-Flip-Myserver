@@ -89,6 +89,8 @@ class UnoGame {
         this.players = [];
         this.deck = [];
         this.discardPile = [];
+        // Keep track of the most recently played card on each side so flipping restores the correct top card
+        this.lastPlayed = { light: null, dark: null };
         this.currentSide = 'light';
         this.currentPlayerIndex = 0;
         this.direction = 1;
@@ -117,11 +119,9 @@ class UnoGame {
             // The current side is tracked globally
         });
 
-        // Number cards (0-9)
+        // Number cards (1-9) — NOTE: 0 card removed for Uno Flip variant
         lightColors.forEach((lc, i) => {
             const dc = darkColors[i];
-            // One zero per color
-            this.deck.push(makeCard({ color: lc, value: '0' }, { color: dc, value: '0' }));
             // Two of each 1-9 per color
             for (let n = 1; n <= 9; n++) {
                 this.deck.push(makeCard({ color: lc, value: n.toString() }, { color: dc, value: n.toString() }));
@@ -131,7 +131,7 @@ class UnoGame {
         // Action cards (2 of each per color) including FLIP (color-specific)
         lightColors.forEach((lc, i) => {
             const dc = darkColors[i];
-            const lightActions = ['skip', 'reverse', 'draw2', 'flip'];
+            const lightActions = ['skip', 'reverse', 'draw1', 'flip'];
             const darkActions = ['skipeveryone', 'reverse', 'draw5', 'flip'];
             lightActions.forEach((la, idx) => {
                 const da = darkActions[idx];
@@ -139,10 +139,12 @@ class UnoGame {
                 this.deck.push(makeCard({ color: lc, value: la }, { color: dc, value: da }));
             });
         });
-        // Wilds (4 of each type). Note: FLIP is not wild; it's color-specific above
+        // Wilds (4 of each type). NOTE: wild draw4 removed; dark-side retains wilddrawcolor
         for (let i = 0; i < 4; i++) {
+            // one plain wild (light: wild, dark: wild)
             this.deck.push(makeCard({ color: 'wild', value: 'wild' }, { color: 'wild', value: 'wild' }));
-            this.deck.push(makeCard({ color: 'wild', value: 'wilddraw4' }, { color: 'wild', value: 'wilddrawcolor' }));
+            // one wild that is light-side wilddraw2 and dark-side wilddrawcolor
+            this.deck.push(makeCard({ color: 'wild', value: 'wilddraw2' }, { color: 'wild', value: 'wilddrawcolor' }));
         }
 
         this.shuffleDeck();
@@ -245,6 +247,8 @@ class UnoGame {
         } while (true);
 
         this.discardPile.push(firstCard);
+        // record the first card as last played for the starting side
+        this.lastPlayed[this.currentSide] = firstCard;
         this.currentPlayerIndex = Math.floor(Math.random() * this.players.length);
     }
 
@@ -255,17 +259,32 @@ class UnoGame {
         return this.deck.pop();
     }
 
-    reshuffleDiscardPile() {
-        if (this.discardPile.length <= 1) {
-            throw new Error('Not enough cards to reshuffle');
-        }
+	reshuffleDiscardPile() {
+		// Infinity deck behavior:
+		// Keep the bottom (first) and the top (last) discards to preserve flip-side context.
+		// Return all middle cards to the deck by inserting each at a random position.
+		const total = this.discardPile.length;
+		if (total <= 2) {
+			throw new Error('Not enough cards to reshuffle');
+		}
 
-        const topCard = this.discardPile.pop();
-        this.deck = [...this.discardPile];
-        this.shuffleDeck();
-        this.discardPile = [topCard];
-        console.log(`🃏 Reshuffled discard pile. Deck now has ${this.deck.length} cards`);
-    }
+		const bottomCard = this.discardPile[0];
+		const topCard = this.discardPile[total - 1];
+		const middleCards = this.discardPile.slice(1, total - 1);
+
+		// Reset discard pile to keep bottom and top (in that order)
+		this.discardPile = [bottomCard, topCard];
+
+		// Insert middle cards back into the deck at random positions for organic distribution
+		middleCards.forEach(card => {
+			const insertIndex = Math.floor(Math.random() * (this.deck.length + 1));
+			this.deck.splice(insertIndex, 0, card);
+		});
+
+		// Ensure lastPlayed for the current side still points to the top card
+		this.lastPlayed[this.currentSide] = topCard;
+		console.log(`♻️  Reshuffled ${middleCards.length} cards back into deck (kept bottom and top). Deck now has ${this.deck.length} cards`);
+	}
 
     // Game Actions
     playCard(playerId, cardIndex) {
@@ -286,8 +305,8 @@ class UnoGame {
             throw new Error('Invalid card index');
         }
 
-        const rawCard = player.hand[cardIndex];
-        const rawTopCard = this.discardPile[this.discardPile.length - 1];
+    const rawCard = player.hand[cardIndex];
+    const rawTopCard = this.getRawTopCard();
 
         const cardSideProps = this.currentSide === 'light' ? rawCard.light : rawCard.dark;
         const topCardSideProps = this.currentSide === 'light' ? rawTopCard.light : rawTopCard.dark;
@@ -302,8 +321,10 @@ class UnoGame {
         const playedCard = player.hand.splice(cardIndex, 1)[0];
         player.hasUno = player.hand.length === 1;
         
-        // Add to discard pile
-        this.discardPile.push(playedCard);
+    // Add to discard pile
+    this.discardPile.push(playedCard);
+    // Record the played card as the last played on the current side so flipping restores it
+    this.lastPlayed[this.currentSide] = playedCard;
 
         // Reset drawn card state
         this.hasDrawnCard = false;
@@ -339,18 +360,25 @@ class UnoGame {
             };
         }
 
-        // FIXED: Move to next turn if not already handled by special card
-        // Reverse card in 3+ players should NOT give another turn to current player
-        if (!['skip', 'reverse', 'draw2', 'skipeveryone', 'draw5'].includes(cardSideProps.value)) {
-            this.nextTurn();
+        // Move to next turn depending on the card and player count
+        // For most cards we simply advance one player. Special cards adjust this behavior.
+        if (cardSideProps.value === 'skip') {
+            if (this.players.length === 2) {
+                // In 2-player games, skip skips the opponent and returns turn to the player who played the skip
+                // Do nothing: current player keeps the turn
+            } else {
+                // In 3+ players, skip the next player -> advance two steps
+                this.nextTurn();
+                this.nextTurn();
+            }
         } else if (cardSideProps.value === 'reverse' && this.players.length === 2) {
-            // Only in 2-player mode, reverse acts as skip (current player plays again)
-            // Do nothing - current player keeps turn
+            // In 2-player mode, reverse acts like a skip: current player plays again
+            // Do nothing
         } else if (cardSideProps.value === 'skipeveryone') {
-            // Dark side skip everyone: current player plays again
-            // Do nothing - current player keeps turn
+            // Dark-side skip everyone: current player plays again
+            // Do nothing
         } else {
-            // For skip, draw2, draw5, and reverse in 3+ players, move to next turn
+            // Default: advance one player
             this.nextTurn();
         }
 
@@ -385,9 +413,9 @@ class UnoGame {
 
         // If there is a pending draw penalty, only allow stacking with draw cards
         if (this.pendingDrawCount > 0) {
-            const isStackCard = (cardS.value === 'draw2' && this.currentSide === 'light') ||
+            const isStackCard = (cardS.value === 'draw1' && this.currentSide === 'light') ||
+                                (cardS.value === 'wilddraw2' && this.currentSide === 'light') ||
                                 (cardS.value === 'draw5' && this.currentSide === 'dark') ||
-                                (cardS.value === 'wilddraw4' && this.currentSide === 'light') ||
                                 (cardS.value === 'wilddrawcolor' && this.currentSide === 'dark');
             if (isStackCard) {
                 console.log('✅ Stacking draw card allowed');
@@ -424,6 +452,12 @@ class UnoGame {
         return false;
     }
 
+    // Return the raw (double-sided) top card for the current side. If discard pile is empty, fallback to lastPlayed for that side.
+    getRawTopCard() {
+        if (this.discardPile.length > 0) return this.discardPile[this.discardPile.length - 1];
+        return this.lastPlayed[this.currentSide] || null;
+    }
+
     handleSpecialCard(card) {
         if (!card) return;
 
@@ -442,14 +476,14 @@ class UnoGame {
                 // In 2-player: current player keeps turn (acts as skip)
                 // In 3+ players: turn advances to previous player
                 break;
-            case 'draw2':
-                // Start or add to stacking penalty, pass turn to next player to allow stacking
-                this.pendingDrawCount += 2;
+            case 'draw1':
+                // Start or add to stacking penalty for light side draw1
+                this.pendingDrawCount += 1;
                 // Turn advance handled in playCard
                 break;
-            case 'wilddraw4':
-                // Wild draw 4 adds 4 to penalty and requires color choice
-                this.pendingDrawCount += 4;
+            case 'wilddraw2':
+                // Wild Draw Two: add 2 to stacking penalty and require color choice
+                this.pendingDrawCount += 2;
                 // Don't advance turn yet - wait for color choice, then advance
                 break;
             case 'wilddrawcolor':
@@ -484,17 +518,25 @@ class UnoGame {
 
         // Only allow setting color if the top card is a wild variant
         if (sideProps && sideProps.color === 'wild') {
+            // Record the chosen color specifically on the top card so clients can render the colored wild image
+            // We store it at card.chosenColor (top-level) so it's independent of side props
+            topCard.chosenColor = color;
+
+            // Also update the in-side color for gameplay matching
             sideProps.color = color;
-            
+
             // Handle special case for wilddrawcolor (draw until color)
             if (sideProps.value === 'wilddrawcolor') {
                 // Set up draw until color for next player
                 this.drawUntilColor = color;
             }
-            
+
             // End wild choice state and advance turn (this passes penalty to next player)
             this.waitingForColorChoice = false;
+            console.log(`🎨 Wild color chosen: ${color} on side ${this.currentSide}. topCard id=${topCard.id}`);
+            console.log('🔖 lastPlayed state before nextTurn:', JSON.stringify({ light: this.lastPlayed.light?.id, dark: this.lastPlayed.dark?.id }));
             this.nextTurn();
+            console.log('🔖 lastPlayed state after nextTurn:', JSON.stringify({ light: this.lastPlayed.light?.id, dark: this.lastPlayed.dark?.id }));
         }
     }
 
@@ -506,6 +548,25 @@ class UnoGame {
         [...this.discardPile, ...this.deck].forEach(card => {
             card.side = this.currentSide;
         });
+
+    // Ensure the top of the discard pile corresponds to the most recently played card on the new side.
+        const last = this.lastPlayed[this.currentSide];
+    console.log('🔄 flipGame: lastPlayed ids:', JSON.stringify({ light: this.lastPlayed.light?.id, dark: this.lastPlayed.dark?.id }));
+    console.log('🔄 discardPile ids before flip:', this.discardPile.map(c => c.id));
+        if (last) {
+            // Try to find the raw card in the discard pile and move it to the top
+            const idx = this.discardPile.findIndex(c => c.id === last.id);
+            if (idx !== -1) {
+                const [card] = this.discardPile.splice(idx, 1);
+                this.discardPile.push(card);
+                console.log(`🔄 Moved card id=${card.id} to top of discard pile`);
+            } else {
+                // If it's not present (edge case), push it as the top card
+                this.discardPile.push(last);
+                console.log(`🔄 Pushed lastPlayed id=${last.id} onto discard pile`);
+            }
+        }
+        console.log('🔄 discardPile ids after flip:', this.discardPile.map(c => c.id));
     }
 
     drawCardForPlayer(playerId) {
@@ -563,10 +624,9 @@ class UnoGame {
         player.hasUno = player.hand.length === 1;
         this.hasDrawnCard = true;
 
-        // End the player's turn immediately after drawing (house rule)
-        this.nextTurn();
-
-        return card;
+        // VOLUNTARY DRAW: do NOT end the player's turn automatically.
+        // Return a structured result so the socket handler can notify clients appropriately.
+        return { type: 'normal', card };
     }
 
     endTurn(playerId) {
@@ -574,9 +634,19 @@ class UnoGame {
             throw new Error("It's not your turn");
         }
 
-        // Check if player can play any card
         const player = this.currentPlayer;
         const topCard = this.discardPile[this.discardPile.length - 1];
+
+        // Cannot end if awaiting wild color choice
+        if (this.waitingForColorChoice) {
+            throw new Error('Choose a color for your wild card before ending your turn');
+        }
+        // Cannot end if there is a pending draw penalty to resolve
+        if (this.pendingDrawCount > 0) {
+            throw new Error('You must resolve the draw penalty before ending your turn');
+        }
+
+        // Determine if player has any playable card
         let canPlay = false;
         for (let card of player.hand) {
             if (this.canPlayCard(card, topCard)) {
@@ -584,11 +654,16 @@ class UnoGame {
                 break;
             }
         }
-        // If player can play, do not end turn until they draw
-        if (canPlay) {
-            throw new Error("You must draw a card if you cannot play");
+
+        // New rule:
+        // - Allow ending the turn if player has drawn a card this turn (even if they can play)
+        // - Or allow ending if they cannot play any card
+        if (!this.hasDrawnCard && canPlay) {
+            throw new Error('You must draw a card or play before ending your turn');
         }
-        // Otherwise, end turn as normal
+
+        // End turn and reset drawn flag
+        this.hasDrawnCard = false;
         this.nextTurn();
     }
 
@@ -627,7 +702,9 @@ class UnoGame {
             otherSide: {
                 color: (this.currentSide === 'light' ? topCardRaw.dark.color : topCardRaw.light.color),
                 value: (this.currentSide === 'light' ? topCardRaw.dark.value : topCardRaw.light.value)
-            }
+            },
+            // If a chosenColor was set (when a wild was played and a color chosen), include it so clients can render colored wild images
+            chosenColor: topCardRaw.chosenColor || null
         } : null;
         return {
             players: this.players.map(player => ({

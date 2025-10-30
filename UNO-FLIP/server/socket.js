@@ -21,6 +21,7 @@ class SocketHandler {
             socket.on('sayUno', (data) => this.handleSayUno(socket, data));
             socket.on('chooseWildColor', (data) => this.handleWildColor(socket, data));
             socket.on('playAgain', (data) => this.handlePlayAgain(socket, data));
+            socket.on('endTurn', (data) => this.handleEndTurn(socket, data));
 
             // Disconnection
             socket.on('disconnect', () => this.handleDisconnect(socket));
@@ -216,18 +217,33 @@ class SocketHandler {
                     cards: drawResult.cards,
                     targetColor: drawResult.targetColor
                 });
+
+                // After draw-until, the turn has advanced on the server; notify next player
+                this.io.to(data.roomCode).emit('playerTurn', {
+                    playerId: game.currentPlayer.id,
+                    playerName: game.currentPlayer.name
+                });
+            } else if (drawResult && drawResult.type === 'normal') {
+                // Voluntary normal draw: player may play the drawn card immediately. Do not advance the turn.
+                this.io.to(data.roomCode).emit('cardDrawn', {
+                    playerName: game.players.find(p => p.id === data.playerId).name,
+                    playerId: data.playerId,
+                    card: drawResult.card
+                });
+                // Do not emit playerTurn change since current player remains the same
             } else {
+                // Penalty draw or other cases: cardDrawn + advance turn
                 this.io.to(data.roomCode).emit('cardDrawn', {
                     playerName: game.players.find(p => p.id === data.playerId).name,
                     playerId: data.playerId
                 });
-            }
 
-            // Notify next player's turn
-            this.io.to(data.roomCode).emit('playerTurn', {
-                playerId: game.currentPlayer.id,
-                playerName: game.currentPlayer.name
-            });
+                // Notify next player's turn
+                this.io.to(data.roomCode).emit('playerTurn', {
+                    playerId: game.currentPlayer.id,
+                    playerName: game.currentPlayer.name
+                });
+            }
 
         } catch (error) {
             console.error(`❌ Error drawing card: ${error.message}`);
@@ -281,6 +297,40 @@ class SocketHandler {
 
         } catch (error) {
             console.error(`❌ Error choosing wild color: ${error.message}`);
+            socket.emit('error', { message: error.message });
+        }
+    }
+
+    handleEndTurn(socket, data) {
+        try {
+            const game = this.gameManager.getGameByRoomCode(data.roomCode);
+            if (!game) return;
+
+            // Ensure it's the player's turn
+            if (game.currentPlayer.id !== data.playerId) {
+                socket.emit('error', { message: "It's not your turn" });
+                return;
+            }
+
+            // Call game logic to end turn
+            try {
+                game.endTurn(data.playerId);
+            } catch (e) {
+                socket.emit('error', { message: e.message });
+                return;
+            }
+
+            // Broadcast updated game state
+            this.broadcastGameState(data.roomCode, game);
+
+            // Notify next player's turn
+            this.io.to(data.roomCode).emit('playerTurn', {
+                playerId: game.currentPlayer.id,
+                playerName: game.currentPlayer.name
+            });
+
+        } catch (error) {
+            console.error(`❌ Error ending turn: ${error.message}`);
             socket.emit('error', { message: error.message });
         }
     }

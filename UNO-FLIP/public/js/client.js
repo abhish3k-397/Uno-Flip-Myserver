@@ -7,6 +7,7 @@ class UnoClient {
         this.isMyTurn = false;
         this.hasDrawnCard = false;
         this.waitingForColorChoice = false;
+    this.pendingPlay = null; // { index, card }
         this.currentWildCardIndex = null;
         this.currentSide = 'light';
         this.gameStartTime = null;
@@ -17,6 +18,25 @@ class UnoClient {
         this.initializeEventListeners();
         this.initializeColorModal();
         this.addCardStyles();
+        this.createEndTurnButton();
+    }
+
+    createEndTurnButton() {
+        const container = document.querySelector('.game-controls-top');
+        if (!container) return;
+        // Avoid duplicate
+        if (document.getElementById('endTurn')) return;
+
+        const endBtn = document.createElement('button');
+        endBtn.id = 'endTurn';
+        endBtn.className = 'btn btn-secondary';
+        endBtn.textContent = 'End Turn';
+        endBtn.disabled = true;
+        endBtn.style.marginLeft = '8px';
+        endBtn.addEventListener('click', () => this.endTurn());
+
+        container.appendChild(endBtn);
+        this.endTurnButton = endBtn;
     }
 
     addCardStyles() {
@@ -124,6 +144,27 @@ class UnoClient {
         document.getElementById('flipDeck').addEventListener('click', () => this.showFlipInfo());
         document.getElementById('playAgain').addEventListener('click', () => this.playAgain());
 
+        // Minimal theme toggle
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            const applyTheme = (theme) => {
+                if (theme === 'dark') {
+                    document.body.setAttribute('data-theme', 'dark');
+                    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                } else {
+                    document.body.removeAttribute('data-theme');
+                    themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                }
+            };
+            const saved = localStorage.getItem('uno.theme');
+            applyTheme(saved || 'light');
+            themeToggle.addEventListener('click', () => {
+                const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('uno.theme', next);
+                applyTheme(next);
+            });
+        }
+
         // Draw pile click event
         document.getElementById('drawPile').addEventListener('click', () => this.drawCard());
 
@@ -168,10 +209,30 @@ class UnoClient {
             const cancelBtn = colorModal.querySelector('#cancelColor');
             if (cancelBtn) {
                 cancelBtn.addEventListener('click', () => {
+                    // Inform server to cancel the pending wild play so the card returns to player's hand
+                    if (this.socket && this.roomCode && this.playerId) {
+                        this.socket.emit('cancelWild', {
+                            roomCode: this.roomCode,
+                            playerId: this.playerId
+                        });
+                    }
                     this.hideColorModal();
                     this.showMessage('Wild card play cancelled', 'warning');
                 });
             }
+            // Allow clicking outside modal content to cancel
+            colorModal.addEventListener('click', (e) => {
+                if (e.target === colorModal) {
+                    if (this.socket && this.roomCode && this.playerId) {
+                        this.socket.emit('cancelWild', {
+                            roomCode: this.roomCode,
+                            playerId: this.playerId
+                        });
+                    }
+                    this.hideColorModal();
+                    this.showMessage('Wild card play cancelled', 'warning');
+                }
+            });
         }
     }
 
@@ -200,7 +261,8 @@ class UnoClient {
                 // Light side actions
                 mappings[`${color}_skip`] = `${basePath}${color}_skip.png`;
                 mappings[`${color}_reverse`] = `${basePath}${color}_reverse.png`;
-                mappings[`${color}_draw2`] = `${basePath}${color}_plus_two.png`;
+                // Uno Flip light side uses Draw 1 instead of Draw 2
+                mappings[`${color}_draw1`] = `${basePath}${color}_plus_one.png`;
                 mappings[`${color}_flip`] = `${basePath}${color}_flip.png`;
             }
 
@@ -226,9 +288,23 @@ class UnoClient {
             ...generateColorMappings('purple', true),
 
             // Wild cards
-            'wild_wild': `${basePath}wild.png`,
-            'wild_wilddraw4': `${basePath}wild_draw_four.png`,
+            // plain wild has different images on light vs dark side
+            'wild_light': `${basePath}wild_light.png`,
+            'wild_dark': `${basePath}wild_dark.png`,
+            // Colored wild variants for light side (these will be used when a wild is chosen to a color)
+            'wild_red': `${basePath}wild_red.png`,
+            'wild_blue': `${basePath}wild_blue.png`,
+            'wild_green': `${basePath}wild_green.png`,
+            'wild_yellow': `${basePath}wild_yellow.png`,
+            // Colored wild variants for dark side (map to dark palette colors)
+            'wild_purple': `${basePath}wild_purple.png`,
+            'wild_teal': `${basePath}wild_teal.png`,
+            'wild_orange': `${basePath}wild_orange.png`,
+            'wild_pink': `${basePath}wild_pink.png`,
+            'wild_wilddraw2': `${basePath}wild_draw_two.png`,
             'wild_wilddrawcolor': `${basePath}draw_until.png`,
+            // Special image to show when a wild-draw-until (wilddrawcolor) has a chosen color
+            'wild_drawuntill': `${basePath}wild_drawuntill.png`,
 
             // Default fallback
             'default': `${basePath}card-back.png`
@@ -243,9 +319,27 @@ class UnoClient {
         if (!card) return this.cardImages.default;
 
         const { color, value, side } = card;
-        
+
+        // If server provided a chosenColor on the top card, prefer that colored wild image
+        // Special-case: if this is a dark-side/light-side wilddrawcolor (draw-until) and a color was chosen,
+        // show the dedicated draw-until image instead of the plain colored wild.
+        if (card.chosenColor) {
+            if (value === 'wilddrawcolor') {
+                // prefer dedicated draw-until image if available
+                if (this.cardImages['wild_drawuntill']) return this.cardImages['wild_drawuntill'];
+            }
+            const chosenKey = `wild_${card.chosenColor}`;
+            if (this.cardImages[chosenKey]) return this.cardImages[chosenKey];
+        }
+
         // Handle wild cards specially
         if (color === 'wild') {
+            // Plain wild uses side-specific images
+            if (value === 'wild') {
+                const sideKey = side === 'dark' ? 'wild_dark' : 'wild_light';
+                return this.cardImages[sideKey] || this.cardImages.default;
+            }
+            // Other wild variants (wilddraw2, wilddrawcolor) use their own keys
             const wildKey = `wild_${value}`;
             if (this.cardImages[wildKey]) {
                 return this.cardImages[wildKey];
@@ -270,9 +364,17 @@ class UnoClient {
             imageKey = `${mappedColor}_${lookupValue}`;
         }
 
+        // If the card represents a wild that has a chosen color (e.g., when rendering top discard),
+        // the server will set card.chosenColor. If present, and the chosenColor maps to a wild_[color] image,
+        // prefer that image (respecting side mapping: light chosenColor will be red/blue/green/yellow, dark will be teal/orange/pink/purple).
+        if (color === 'wild' && card.chosenColor) {
+            const chosenKey = `wild_${card.chosenColor}`;
+            if (this.cardImages[chosenKey]) return this.cardImages[chosenKey];
+        }
+
         // Handle action naming differences
-        if (lookupValue === 'draw2' || lookupValue === 'draw5') {
-            // keep as-is (card mapping uses draw2/draw5 keys)
+        if (lookupValue === 'draw1' || lookupValue === 'draw5') {
+            // keep as-is (card mapping uses draw1/draw5 keys)
         }
 
         const imagePath = this.cardImages[imageKey] || this.cardImages.default;
@@ -295,6 +397,7 @@ class UnoClient {
             { color: 'green', value: 'skip', side: 'light' },
             { color: 'teal', value: '3', side: 'dark' },
             { color: 'purple', value: 'draw5', side: 'dark' },
+            { color: 'red', value: 'draw1', side: 'light' },
             { color: 'wild', value: 'wild', side: 'light' }
         ];
         testCards.forEach(card => {
@@ -302,6 +405,20 @@ class UnoClient {
             console.log(`🎴 ${card.color} ${card.value} (${card.side}) -> ${imagePath}`);
         });
         console.log('=== END DEBUG ===');
+    }
+
+    // Debug helper: log top discard card info (including chosenColor) for verification
+    logTopCardInfo() {
+        // This expects the latest game state to have been applied via updateGameState
+        const discardPileState = document.getElementById('discardPile');
+        if (!discardPileState) {
+            console.warn('No discardPile element found');
+            return;
+        }
+        console.log('DOM discardPile element:', discardPileState);
+        // If server included chosenColor it will be visible in title or as a class
+        console.log('Classes:', discardPileState.className);
+        console.log('Background-image inline style:', discardPileState.style.getPropertyValue('background-image'));
     }
 
     // Force-set card background using inline styles with higher specificity
@@ -331,9 +448,9 @@ class UnoClient {
             'flip': 'FLIP',
             'skip': 'SKIP',
             'reverse': 'REV',
-            'draw2': '+2',
+            'draw1': '+1',
             'draw5': '+5',
-            'wilddraw4': 'W+4',
+            'wilddraw2': 'W+2',
             'wilddrawcolor': 'W+Color',
             'skipeveryone': 'SKIP ALL',
             '0': '0', '1': '1', '2': '2', '3': '3', '4': '4',
@@ -393,8 +510,9 @@ class UnoClient {
         if (topCard) {
             // Remove any existing color classes and set base classes
             discardPile.className = 'uno-card discard-card';
-            // Add the correct color class
-            discardPile.classList.add(topCard.color);
+            // Add the correct color class (use chosenColor if provided for wilds)
+            const visualColor = topCard.chosenColor || topCard.color;
+            discardPile.classList.add(visualColor);
 
             // Set card image
             const cardImage = this.getCardImage(topCard);
@@ -422,8 +540,8 @@ class UnoClient {
             if (currentTopCard) {
                 // Remove any existing color classes from current top card
                 currentTopCard.className = 'uno-card';
-                // Add the correct color class
-                currentTopCard.classList.add(topCard.color);
+                // Add the correct color class (use chosenColor if provided)
+                currentTopCard.classList.add(visualColor);
 
                 // Set card image for current top card
                 if (cardImage && cardImage !== this.cardImages.default) {
@@ -472,10 +590,10 @@ class UnoClient {
         const symbols = {
             'skip': '⏭️',
             'reverse': '🔄',
-            'draw2': '+2',
+            'draw1': '+1',
             'draw5': '+5',
+            'wilddraw2': 'W+2',
             'wild': '🌈',
-            'wilddraw4': 'W+4',
             'wilddrawcolor': 'W+Color',
             'flip': '🃏',
             'skipeveryone': '⏩'
@@ -502,9 +620,16 @@ class UnoClient {
             this.showMessage('Disconnected from server', 'error');
         });
 
+        // Server error handler - also revert any pending UI play
         this.socket.on('error', (data) => {
             console.error('Server error:', data.message);
             this.showMessage(data.message, 'error');
+            // If we have a pending play (client removed visually), revert UI to server's authoritative state
+            if (this.pendingPlay) {
+                this.pendingPlay = null;
+                // Re-render using last known game state
+                if (this.lastGameState) this.updateGameState(this.lastGameState);
+            }
         });
 
         // Lobby events
@@ -730,13 +855,17 @@ class UnoClient {
                 '<i class="fas fa-moon"></i> Dark' : '<i class="fas fa-sun"></i> Light';
         }
         this.currentSide = data.currentSide || 'light';
+    // Keep last game state for client-side playability checks
+    this.lastGameState = data;
+    // Clear any pending play when we receive authoritative state
+    this.pendingPlay = null;
         
         document.getElementById('currentPlayerName').textContent = data.currentPlayerName || 'Unknown';
         document.getElementById('deckCount').textContent = data.deckCount || 0;
         document.getElementById('deckCountBadge').textContent = data.deckCount || 0;
         
         // Update player's hand
-        this.updatePlayerHand(data.playerHand || []);
+    this.updatePlayerHand(data.playerHand || []);
         
         // Update opponents
         this.updateOpponents(data.players || [], data.currentPlayerIndex || 0);
@@ -783,10 +912,25 @@ class UnoClient {
             return;
         }
 
+        // Determine current top card for playability checks
+        const topCard = this.lastGameState ? this.lastGameState.topCard : null;
+
         hand.forEach((card, index) => {
-            const cardElement = this.createCardElement(card, index, this.isMyTurn);
+            const playable = this.isMyTurn && this.clientCanPlay(card, topCard);
+            const cardElement = this.createCardElement(card, index, playable);
             handContainer.appendChild(cardElement);
         });
+    }
+
+    // Client-side playability check using the same rules as server: match color/value or wilds
+    clientCanPlay(card, topCard) {
+        if (!card || !topCard) return false;
+        // If top card is a wild with chosenColor, it behaves like that color for matching
+        const topColor = topCard.chosenColor || topCard.color;
+        if (card.color === 'wild') return true; // wild can always be played
+        if (card.color === topColor) return true;
+        if (card.value === topCard.value) return true;
+        return false;
     }
 
     updateOpponents(players, currentPlayerIndex) {
@@ -861,7 +1005,11 @@ class UnoClient {
             if (this.waitingForColorChoice) {
                 if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-palette"></i><span>Choose a color for your wild card</span>';
             } else if (this.hasDrawnCard) {
-                if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-hand-paper"></i><span>You drew a card. Play it or turn ends.</span>';
+                if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-hand-paper"></i><span>You drew a card. Play it or end your turn.</span>';
+                // New rule: after drawing, player may end turn even if they can play
+                if (this.endTurnButton) {
+                    this.endTurnButton.disabled = false;
+                }
             } else {
                 if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-gamepad"></i><span>Play a card or draw from the deck</span>';
             }
@@ -876,6 +1024,8 @@ class UnoClient {
             sayUnoButton.classList.remove('glow');
             if (turnInstruction) turnInstruction.innerHTML = `<i class="fas fa-clock"></i><span>Waiting for ${document.getElementById('currentPlayerName').textContent}</span>`;
             document.body.classList.remove('my-turn');
+            // disable End Turn when not our turn
+            if (this.endTurnButton) this.endTurnButton.disabled = true;
         }
     }
 
@@ -913,12 +1063,18 @@ class UnoClient {
             return;
         }
 
-        console.log(`🎯 Playing ${card.color} ${card.value} at index ${cardIndex}`);
+    console.log(`🎯 Playing ${card.color} ${card.value} at index ${cardIndex}`);
+
+    // Mark as pending so the UI doesn't remove it immediately. We'll remove it when server confirms.
+    this.pendingPlay = { index: cardIndex, card };
+    // Add a visual pending class to the card element
+    const cardEls = document.querySelectorAll('.hand-card');
+    const playingEl = cardEls[cardIndex];
+    if (playingEl) playingEl.classList.add('pending-play');
 
         // Animate card playing
-        const cardElement = document.querySelectorAll('.hand-card')[cardIndex];
-        if (cardElement) {
-            cardElement.classList.add('card-play-animation');
+        if (playingEl) {
+            playingEl.classList.add('card-play-animation');
             
             // Send play command after animation starts
             setTimeout(() => {
@@ -969,6 +1125,22 @@ class UnoClient {
         }
 
         this.socket.emit('drawCard', {
+            roomCode: this.roomCode,
+            playerId: this.playerId
+        });
+    }
+
+    endTurn() {
+        if (!this.roomCode) {
+            this.showMessage('Not in a game room', 'error');
+            return;
+        }
+        if (!this.isMyTurn) {
+            this.showMessage("It's not your turn!", 'error');
+            return;
+        }
+
+        this.socket.emit('endTurn', {
             roomCode: this.roomCode,
             playerId: this.playerId
         });
@@ -1058,7 +1230,11 @@ class UnoClient {
             discardPile.classList.add('flip-animation');
             setTimeout(() => {
                 discardPile.classList.remove('flip-animation');
-                this.updateDiscardPile(data.card);
+                // If the played card is a FLIP, the server's gameStateUpdate already sent the correct top card for the newly active side.
+                // Avoid overriding it with the raw flip card which can cause the visual to stay on the wrong side until the next state update.
+                if (data.card.value !== 'flip') {
+                    this.updateDiscardPile(data.card);
+                }
             }, 300);
         }
     }
@@ -1070,6 +1246,12 @@ class UnoClient {
         // Update hand with animation for our own cards
         if (data.playerId === this.playerId) {
             this.hasDrawnCard = true;
+            // If server provided the specific drawn card (voluntary draw), keep a reference so UI/UX can highlight it
+            if (data.card) {
+                this.lastDrawnCard = data.card;
+            } else {
+                this.lastDrawnCard = null;
+            }
             this.updateTurnIndicator();
         }
     }

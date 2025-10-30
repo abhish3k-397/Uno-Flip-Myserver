@@ -11,6 +11,16 @@
 </head>
 <body>
     <div id="app">
+        <div class="topbar">
+            <div class="topbar-left">
+                <span class="brand">UNO FLIP</span>
+            </div>
+            <div class="topbar-right">
+                <button id="themeToggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
         <!-- Background Elements -->
         <div class="background-elements">
             <div class="floating-card card-1"></div>
@@ -118,6 +128,7 @@
 
         <!-- Game Screen -->
         <div id="game" class="screen">
+            <div id="gameMessage" class="game-message" style="display:none"></div>
             <div class="game-header glass">
                 <div class="game-info">
                     <div class="info-item">
