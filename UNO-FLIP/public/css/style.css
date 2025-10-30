@@ -117,9 +117,17 @@ body {
     color: var(--text-muted);
 }
 
-#player-turn-list .current-turn {
+#player-turn-list span.current-turn {
     font-weight: 700;
     color: var(--primary-color);
+    background: none;
+    padding: 0;
+    border-radius: 0;
+}
+
+#player-turn-list span.current-turn .value {
+    font-weight: 700;
+    color: var(--text-strong);
 }
 
 /* Minimal message bar */
@@ -935,12 +943,6 @@ body {
     left: 100%;
 }
 
-.opponent.current-turn {
-    border-color: #ffd700;
-    background: rgba(255, 215, 0, 0.2);
-    transform: scale(1.05);
-    box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
-}
 
 .opponent-name {
     font-weight: 700;
