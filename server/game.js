@@ -116,7 +116,7 @@ class UnoGame {
         const makeCard = (light, dark) => ({
             id: Math.random().toString(36).substr(2, 9),
             light,
-            dark,
+  dark,
             // The current side is tracked globally
         });
 
@@ -212,8 +212,8 @@ class UnoGame {
 
     // Game Flow
     startGame() {
-        if (this.players.length < 1) {
-            throw new Error('Need at least 1 players to start');
+        if (this.players.length < 2) {
+            throw new Error('Need at least 2 players to start');
         }
 
         if (this.gameStarted) {
@@ -613,15 +613,16 @@ class UnoGame {
                 const cardSideProps = this.currentSide === 'light' ? drawnCard.light : drawnCard.dark;
                 if (cardSideProps.color === this.drawUntilColor) {
                     console.log(`📥 Draw until color complete: ${player.name} drew ${drawnCards.length} cards until ${this.drawUntilColor}`);
-                    break;
+      break;
                 }
             } while (drawnCard); // Continue until we find the color or deck runs out
             
             player.hasUno = player.hand.length === 1;
+            const target = this.drawUntilColor;
             this.drawUntilColor = null; // Reset the draw until color
             this.hasDrawnCard = true;
             this.nextTurn();
-            return { type: 'drawUntilColor', cards: drawnCards, targetColor: this.drawUntilColor };
+            return { type: 'drawUntilColor', cards: drawnCards, targetColor: target };
         }
 
         // If there is a pending draw penalty, the player must take it now
@@ -673,7 +674,7 @@ class UnoGame {
         for (let card of player.hand) {
             if (this.canPlayCard(card, topCard)) {
                 canPlay = true;
-                break;
+      break;
             }
         }
 

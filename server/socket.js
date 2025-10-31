@@ -130,9 +130,10 @@ class SocketHandler {
                 return;
             }
 
-            console.log(`🃏 ${this.getPlayerName(game, data.playerId)} attempting to play card at index ${data.cardIndex}`);
+            const playerId = socket.id;
+            console.log(`🃏 ${this.getPlayerName(game, playerId)} attempting to play card at index ${data.cardIndex}`);
 
-            const result = game.playCard(data.playerId, data.cardIndex);
+            const result = game.playCard(playerId, data.cardIndex);
 
             // If it's a wild card that requires color choice, wait for that
             if (result.requiresColorChoice) {
@@ -144,7 +145,7 @@ class SocketHandler {
                 this.broadcastGameState(data.roomCode, game);
                 
                 this.io.to(data.roomCode).emit('cardPlayed', {
-                    playerName: game.players.find(p => p.id === data.playerId).name,
+                    playerName: game.players.find(p => p.id === playerId).name,
                     card: result.playedCard,
                     waitingForColor: true
                 });
@@ -158,12 +159,12 @@ class SocketHandler {
 
             // Notify about the played card
             this.io.to(data.roomCode).emit('cardPlayed', {
-                playerName: game.players.find(p => p.id === data.playerId).name,
+                playerName: game.players.find(p => p.id === playerId).name,
                 card: result.playedCard,
                 waitingForColor: false
             });
 
-            console.log(`✅ ${this.getPlayerName(game, data.playerId)} played ${result.playedCard.color} ${result.playedCard.value}`);
+            console.log(`✅ ${this.getPlayerName(game, playerId)} played ${result.playedCard.color} ${result.playedCard.value}`);
 
             // Handle game over
             if (result.gameOver) {
@@ -202,9 +203,10 @@ class SocketHandler {
                 return;
             }
 
-            console.log(`📥 ${this.getPlayerName(game, data.playerId)} drawing a card`);
+            const playerId = socket.id;
+            console.log(`📥 ${this.getPlayerName(game, playerId)} drawing a card`);
 
-            const drawResult = game.drawCardForPlayer(data.playerId);
+            const drawResult = game.drawCardForPlayer(playerId);
 
             // Update all players with new game state
             this.broadcastGameState(data.roomCode, game);
@@ -212,8 +214,8 @@ class SocketHandler {
             // Handle different draw types
             if (drawResult && drawResult.type === 'drawUntilColor') {
                 this.io.to(data.roomCode).emit('drawUntilColor', {
-                    playerName: game.players.find(p => p.id === data.playerId).name,
-                    playerId: data.playerId,
+                    playerName: game.players.find(p => p.id === playerId).name,
+                    playerId: playerId,
                     cards: drawResult.cards,
                     targetColor: drawResult.targetColor
                 });
@@ -226,16 +228,16 @@ class SocketHandler {
             } else if (drawResult && drawResult.type === 'normal') {
                 // Voluntary normal draw: player may play the drawn card immediately. Do not advance the turn.
                 this.io.to(data.roomCode).emit('cardDrawn', {
-                    playerName: game.players.find(p => p.id === data.playerId).name,
-                    playerId: data.playerId,
+                    playerName: game.players.find(p => p.id === playerId).name,
+                    playerId: playerId,
                     card: drawResult.card
                 });
                 // Do not emit playerTurn change since current player remains the same
             } else {
                 // Penalty draw or other cases: cardDrawn + advance turn
                 this.io.to(data.roomCode).emit('cardDrawn', {
-                    playerName: game.players.find(p => p.id === data.playerId).name,
-                    playerId: data.playerId
+                    playerName: game.players.find(p => p.id === playerId).name,
+                    playerId: playerId
                 });
 
                 // Notify next player's turn
@@ -256,10 +258,11 @@ class SocketHandler {
             const game = this.gameManager.getGameByRoomCode(data.roomCode);
             if (!game) return;
 
-            game.sayUno(data.playerId);
+            const playerId = socket.id;
+            game.sayUno(playerId);
 
             this.io.to(data.roomCode).emit('unoCalled', {
-                playerName: game.players.find(p => p.id === data.playerId).name
+                playerName: game.players.find(p => p.id === playerId).name
             });
 
             // Update game state for all players
@@ -276,7 +279,8 @@ class SocketHandler {
             const game = this.gameManager.getGameByRoomCode(data.roomCode);
             if (!game) return;
 
-            console.log(`🎨 ${this.getPlayerName(game, data.playerId)} choosing wild color: ${data.color}`);
+            const playerId = socket.id;
+            console.log(`🎨 ${this.getPlayerName(game, playerId)} choosing wild color: ${data.color}`);
 
             game.handleWildColorChoice(data.color);
 
@@ -286,7 +290,7 @@ class SocketHandler {
             // Notify all players about the color choice
             this.io.to(data.roomCode).emit('wildColorChosen', {
                 color: data.color,
-                playerName: game.players.find(p => p.id === data.playerId).name
+                playerName: game.players.find(p => p.id === playerId).name
             });
 
             // Notify next player's turn
@@ -307,14 +311,15 @@ class SocketHandler {
             if (!game) return;
 
             // Ensure it's the player's turn
-            if (game.currentPlayer.id !== data.playerId) {
+            const playerId = socket.id;
+            if (game.currentPlayer.id !== playerId) {
                 socket.emit('error', { message: "It's not your turn" });
                 return;
             }
 
             // Call game logic to end turn
             try {
-                game.endTurn(data.playerId);
+                game.endTurn(playerId);
             } catch (e) {
                 socket.emit('error', { message: e.message });
                 return;
