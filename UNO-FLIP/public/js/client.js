@@ -825,6 +825,9 @@ class UnoClient {
         this.updateGameState(data);
         this.showMessage('🎲 Game started! Good luck!', 'success');
 
+        // Enter fullscreen mode
+        this.enterFullscreen();
+
         // Debug: Check if game screen is visible
         const gameScreen = document.getElementById('game');
         console.log('🎯 Game screen element:', gameScreen);
@@ -838,6 +841,19 @@ class UnoClient {
                 card.classList.add('card-deal-animation');
             });
         }, 100);
+    }
+
+    enterFullscreen() {
+        const element = document.documentElement;
+        if (element.requestFullscreen) {
+            element.requestFullscreen().catch(err => {
+                console.log('Fullscreen request denied:', err);
+            });
+        } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
+        }
     }
 
     updateGameState(data) {
@@ -873,8 +889,8 @@ class UnoClient {
         // Update player's hand
     this.updatePlayerHand(data.playerHand || []);
         
-        // Update opponents
-        this.updateOpponents(data.players || [], data.currentPlayerIndex || 0);
+        // Update floating background cards
+        this.updateFloatingCards(data.currentSide || 'light');
         
         // Update discard pile
         this.updateDiscardPile(data.topCard);
@@ -1010,6 +1026,45 @@ class UnoClient {
             `;
             
             opponentsArea.appendChild(opponentElement);
+        });
+    }
+
+    updateFloatingCards(currentSide) {
+        // Remove old opponent update method - floating cards instead
+        const floatingCards = document.querySelectorAll('.floating-card');
+        
+        if (floatingCards.length === 0) return;
+        
+        // Define card pools for each side
+        const lightSideCards = [
+            'red_one', 'red_five', 'red_seven',
+            'blue_two', 'blue_four', 'blue_eight',
+            'green_three', 'green_six', 'green_nine',
+            'yellow_zero', 'yellow_one', 'yellow_flip'
+        ];
+        
+        const darkSideCards = [
+            'teal_one', 'teal_five', 'teal_seven',
+            'orange_two', 'orange_four', 'orange_eight',
+            'pink_three', 'pink_six', 'pink_nine',
+            'purple_zero', 'purple_one', 'purple_flip'
+        ];
+        
+        const cardPool = currentSide === 'dark' ? darkSideCards : lightSideCards;
+        
+        // Apply random cards from the appropriate pool to each floating card
+        floatingCards.forEach(card => {
+            const randomCard = cardPool[Math.floor(Math.random() * cardPool.length)];
+            const imagePath = this.cardImages[randomCard] || this.cardImages.default;
+            
+            // Apply the card image
+            card.style.backgroundImage = `url('${imagePath}')`;
+            card.style.backgroundSize = 'cover';
+            card.style.backgroundPosition = 'center';
+            card.style.backgroundRepeat = 'no-repeat';
+            
+            // Remove any gradient background that was previously applied
+            card.classList.add('floating-card-image');
         });
     }
 
@@ -1307,6 +1362,9 @@ class UnoClient {
         // Animate the entire game board
         document.body.classList.add('flip-animation');
         setTimeout(() => document.body.classList.remove('flip-animation'), 600);
+        
+        // Update floating cards to match the new side
+        this.updateFloatingCards(data.newSide);
         
         // Update side indicator
         const sideElement = document.getElementById('currentSide');
