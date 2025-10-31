@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/app.js",
     "dev": "nodemon server/app.js",
-    "build:assets": "esbuild public/js/client.js public/js/game.js --bundle --minify --sourcemap --outfile=public/js/bundle.js"
+    "build:assets": "esbuild public/js/index.js --bundle --minify --sourcemap --outfile=public/js/bundle.js"
   },
   "dependencies": {
     "express": "^4.18.2",

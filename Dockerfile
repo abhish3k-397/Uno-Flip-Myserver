@@ -15,10 +15,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install only production dependencies using the lockfile generated in builder
+# Install only production dependencies (avoid npm ci to skip lockfile strictness)
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/package-lock.json /app/package-lock.json
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy application code and built assets from builder
 COPY --from=builder /app/server /app/server
