@@ -1,0 +1,21 @@
+{
+  "name": "uno-flip",
+  "version": "1.0.0",
+  "description": "Web-based UNO Flip game for 2-6 players",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["uno", "multiplayer", "game", "socket.io"],
+  "author": "My Name",
+  "license": "MIT"
+}
+
