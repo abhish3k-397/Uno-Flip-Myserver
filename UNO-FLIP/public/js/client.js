@@ -11,6 +11,8 @@ class UnoClient {
         this.currentWildCardIndex = null;
         this.currentSide = 'light';
         this.gameStartTime = null;
+        this.handLayout = 'flat'; // 'flat' | 'fan'
+        this.currentHand = [];
         
         // Card image mapping - UPDATED with your image structure
         this.cardImages = this.initializeCardImages();
@@ -76,6 +78,33 @@ class UnoClient {
             rulesBtn.title = 'Show Rules';
             topBarRight.insertBefore(rulesBtn, topBarRight.firstChild);
             rulesBtn.addEventListener('click', () => this.showRules());
+        }
+
+        // Hand layout toggle
+        const header = document.querySelector('.player-header');
+        const existingToggle = document.getElementById('handLayoutToggle');
+        if (existingToggle && !existingToggle._bound) {
+            existingToggle.addEventListener('click', () => {
+                this.handLayout = this.handLayout === 'flat' ? 'fan' : 'flat';
+                this.updatePlayerHand(this.currentHand || []);
+            });
+            existingToggle._bound = true;
+        } else if (header && !existingToggle) {
+            const controls = document.createElement('div');
+            controls.className = 'hand-controls';
+            const toggleBtn = document.createElement('button');
+            toggleBtn.id = 'handLayoutToggle';
+            toggleBtn.className = 'icon-btn';
+            toggleBtn.title = 'Toggle hand layout';
+            toggleBtn.setAttribute('aria-label', 'Toggle hand layout');
+            toggleBtn.innerHTML = '<i class="fas fa-layer-group"></i>';
+            controls.appendChild(toggleBtn);
+            header.appendChild(controls);
+            toggleBtn.addEventListener('click', () => {
+                this.handLayout = this.handLayout === 'flat' ? 'fan' : 'flat';
+                this.updatePlayerHand(this.currentHand || []);
+            });
+            toggleBtn._bound = true;
         }
     }
 
@@ -216,6 +245,32 @@ class UnoClient {
 
         // Rules modal close button
         document.getElementById('closeRules').addEventListener('click', () => this.hideRules());
+
+        // Global keyboard shortcuts (game screen)
+        document.addEventListener('keydown', (e) => {
+            // Ignore when typing into inputs or modals
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+            const gameScreen = document.getElementById('game');
+            const gameActive = gameScreen && gameScreen.classList.contains('active');
+            if (!gameActive) return;
+
+            // K to draw card
+            if (e.key === 'k' || e.key === 'K') {
+                e.preventDefault();
+                if (this.isMyTurn && !this.waitingForColorChoice && !this.hasDrawnCard) {
+                    this.drawCard();
+                }
+            }
+            // Enter to end turn
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (this.isMyTurn && !this.waitingForColorChoice) {
+                    this.endTurn();
+                }
+            }
+        });
     }
 
     initializeColorModal() {
@@ -330,6 +385,11 @@ class UnoClient {
             'wild_blue_plus2': `${basePath}wild_blue_plus2.png`,
             'wild_green_plus2': `${basePath}wild_green_plus2.png`,
             'wild_yellow_plus2': `${basePath}wild_yellow_plus2.png`,
+            // Color-specific draw-until images for dark side
+            'draw_untill_teal': `${basePath}draw_untill_teal.png`,
+            'draw_untill_orange': `${basePath}draw_untill_orange.png`,
+            'draw_untill_pink': `${basePath}draw_untill_pink.png`,
+            'draw_untill_purple': `${basePath}draw_untill_purple.png`,
             // Colored wild variants for dark side (map to dark palette colors)
             'wild_purple': `${basePath}wild_purple.png`,
             'wild_teal': `${basePath}wild_teal.png`,
@@ -367,6 +427,8 @@ class UnoClient {
                 if (this.cardImages['wild_wilddraw2']) return this.cardImages['wild_wilddraw2'];
             }
             if (value === 'wilddrawcolor') {
+                const untilKey = `draw_untill_${card.chosenColor}`;
+                if (this.cardImages[untilKey]) return this.cardImages[untilKey];
                 if (this.cardImages['wild_drawuntill']) return this.cardImages['wild_drawuntill'];
             }
             const chosenKey = `wild_${card.chosenColor}`;
@@ -908,6 +970,8 @@ class UnoClient {
         
         if (!handContainer || !cardCount) return;
 
+        this.currentHand = Array.isArray(hand) ? hand.slice() : [];
+
         handContainer.innerHTML = '';
         cardCount.textContent = hand ? hand.length : 0;
 
@@ -937,11 +1001,33 @@ class UnoClient {
         // Determine current top card for playability checks
         const topCard = this.lastGameState ? this.lastGameState.topCard : null;
 
-        hand.forEach((card, index) => {
-            const playable = this.isMyTurn && this.clientCanPlay(card, topCard);
-            const cardElement = this.createCardElement(card, index, playable);
-            handContainer.appendChild(cardElement);
-        });
+        // Apply layout class
+        handContainer.classList.toggle('fan', this.handLayout === 'fan');
+
+        if (this.handLayout === 'fan') {
+            const n = hand.length;
+            const spreadDeg = 60; // arc total
+            const start = -spreadDeg / 2;
+            const stepDeg = n > 1 ? spreadDeg / (n - 1) : 0;
+            hand.forEach((card, i) => {
+                const playable = this.isMyTurn && this.clientCanPlay(card, topCard);
+                const el = this.createCardElement(card, i, playable);
+                const angle = start + stepDeg * i;
+                el.style.removeProperty('position');
+                el.style.removeProperty('left');
+                el.style.removeProperty('bottom');
+                el.style.setProperty('--rot', angle + 'deg');
+                el.style.zIndex = (i + 1).toString(); // back-to-front order
+                el.style.margin = '0 -40px';
+                handContainer.appendChild(el);
+            });
+        } else {
+            hand.forEach((card, index) => {
+                const playable = this.isMyTurn && this.clientCanPlay(card, topCard);
+                const cardElement = this.createCardElement(card, index, playable);
+                handContainer.appendChild(cardElement);
+            });
+        }
     }
 
     // Client-side playability check using the same rules as server: match color/value or wilds
@@ -1393,26 +1479,21 @@ class UnoClient {
         // Show game over screen
         this.switchScreen('gameOver');
         
-        // Update winner display
-        const winnerElement = document.getElementById('winnerName');
-        if (winnerElement) {
-            winnerElement.textContent = winnerName;
+        // Update winner message (match DOM id)
+        const winnerMsg = document.getElementById('winnerMessage');
+        if (winnerMsg) {
+            winnerMsg.textContent = `Winner: ${winnerName}`;
         }
-        
-        // Update game stats
-        const statsElement = document.getElementById('gameStats');
-        if (statsElement) {
-            statsElement.innerHTML = `
-                <div class="stat-item">
-                    <i class="fas fa-clock"></i>
-                    <span>Duration: ${gameDuration}s</span>
-                </div>
-                <div class="stat-item">
-                    <i class="fas fa-users"></i>
-                    <span>Players: ${data.players?.length || 0}</span>
-                </div>
-            `;
-        }
+
+        // Update game stats (match DOM ids)
+        const totalPlayers = this.lastGameState?.players?.length || 0;
+        const durationEl = document.getElementById('statDuration');
+        const playersEl = document.getElementById('statPlayers');
+        const cardsEl = document.getElementById('statCards');
+        if (durationEl) durationEl.textContent = `${Math.max(1, Math.round(gameDuration/60))}m`;
+        if (playersEl) playersEl.textContent = `${totalPlayers}`;
+        // cards played not tracked; clear or leave default
+        if (cardsEl) cardsEl.textContent = `${this.cardsPlayed || 0}`;
     }
 
     onPlayerLeft(data) {
@@ -1516,26 +1597,35 @@ class UnoClient {
         }
     }
 
-    returnToLobby() {
+    returnToLobby(preserveRoom = true) {
         this.switchScreen('lobby');
-        this.roomCode = null;
         this.isMyTurn = false;
         this.hasDrawnCard = false;
         this.waitingForColorChoice = false;
         this.currentWildCardIndex = null;
         this.currentSide = 'light';
-        // Reset UI elements
-        document.getElementById('roomIdDisplay').textContent = '-----';
-        document.getElementById('playerHand').innerHTML = '';
-        document.getElementById('discardPile').innerHTML = '';
-        document.getElementById('currentTopCard').innerHTML = '';
+        // Preserve room association by default so host can start again
+        const roomIdEl = document.getElementById('roomIdDisplay');
+        if (!preserveRoom) {
+            this.roomCode = null;
+            if (roomIdEl) roomIdEl.textContent = '-----';
+        } else {
+            if (roomIdEl && this.roomCode) roomIdEl.textContent = this.roomCode;
+        }
+        // Reset UI elements specific to game view
+        const handEl = document.getElementById('playerHand');
+        const discardEl = document.getElementById('discardPile');
+        if (handEl) handEl.innerHTML = '';
+        if (discardEl) discardEl.innerHTML = '<div class="card-start"><i class="fas fa-play"></i></div>';
         this.showMessage('Returned to lobby', 'info');
     }
 
     playAgain() {
-        this.switchScreen('lobby');
-        this.returnToLobby();
-        this.showMessage('Ready to play again!', 'info');
+        if (this.socket && this.roomCode) {
+            this.socket.emit('playAgain', { roomCode: this.roomCode });
+        }
+        // UI feedback; the server will emit 'returnToLobby'
+        this.showMessage('Resetting game...', 'info');
     }
 }
 
