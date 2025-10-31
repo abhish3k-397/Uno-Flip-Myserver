@@ -3,8 +3,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install full deps for build (includes devDependencies like esbuild)
+# Use npm install to handle lockfile mismatches gracefully
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source and build bundled assets
 COPY . .
