@@ -260,32 +260,28 @@ class UnoGame {
         return this.deck.pop();
     }
 
-	reshuffleDiscardPile() {
-		// Infinity deck behavior:
-		// Keep the bottom (first) and the top (last) discards to preserve flip-side context.
-		// Return all middle cards to the deck by inserting each at a random position.
-		const total = this.discardPile.length;
-		if (total <= 2) {
-			throw new Error('Not enough cards to reshuffle');
-		}
+    reshuffleDiscardPile() {
+        // Always attempt to compact the discard pile; if not enough cards, do nothing.
+        const total = this.discardPile.length;
+        if (total <= 2) return;
 
-		const bottomCard = this.discardPile[0];
-		const topCard = this.discardPile[total - 1];
-		const middleCards = this.discardPile.slice(1, total - 1);
+        const bottomCard = this.discardPile[0];
+        const topCard = this.discardPile[total - 1];
+        const middleCards = this.discardPile.slice(1, total - 1);
 
-		// Reset discard pile to keep bottom and top (in that order)
-		this.discardPile = [bottomCard, topCard];
+        // Reset discard pile to keep bottom and top (in that order)
+        this.discardPile = [bottomCard, topCard];
 
-		// Insert middle cards back into the deck at random positions for organic distribution
-		middleCards.forEach(card => {
-			const insertIndex = Math.floor(Math.random() * (this.deck.length + 1));
-			this.deck.splice(insertIndex, 0, card);
-		});
+        // Insert middle cards back into the deck at random positions for organic distribution
+        middleCards.forEach(card => {
+            const insertIndex = Math.floor(Math.random() * (this.deck.length + 1));
+            this.deck.splice(insertIndex, 0, card);
+        });
 
-		// Ensure lastPlayed for the current side still points to the top card
-		this.lastPlayed[this.currentSide] = topCard;
-		console.log(`♻️  Reshuffled ${middleCards.length} cards back into deck (kept bottom and top). Deck now has ${this.deck.length} cards`);
-	}
+        // Ensure lastPlayed for the current side still points to the top card
+        this.lastPlayed[this.currentSide] = topCard;
+        console.log(`♻️  Compacted discard: moved ${middleCards.length} cards to deck. Deck now has ${this.deck.length} cards`);
+    }
 
     // Game Actions
     playCard(playerId, cardIndex) {
@@ -326,6 +322,8 @@ class UnoGame {
     this.discardPile.push(playedCard);
     // Record the played card as the last played on the current side so flipping restores it
     this.lastPlayed[this.currentSide] = playedCard;
+        // Always compact the discard pile so only bottom and top remain
+        this.reshuffleDiscardPile();
 
         // Reset drawn card state
         this.hasDrawnCard = false;
@@ -556,6 +554,8 @@ class UnoGame {
             console.log('🔖 lastPlayed state before nextTurn:', JSON.stringify({ light: this.lastPlayed.light?.id, dark: this.lastPlayed.dark?.id }));
             this.nextTurn();
             console.log('🔖 lastPlayed state after nextTurn:', JSON.stringify({ light: this.lastPlayed.light?.id, dark: this.lastPlayed.dark?.id }));
+            // Keep discard pile compact
+            this.reshuffleDiscardPile();
         }
     }
 
@@ -586,6 +586,8 @@ class UnoGame {
             }
         }
         console.log('🔄 discardPile ids after flip:', this.discardPile.map(c => c.id));
+        // Keep only bottom and top on discard
+        this.reshuffleDiscardPile();
     }
 
     drawCardForPlayer(playerId) {
