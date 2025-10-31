@@ -99,6 +99,7 @@ class UnoGame {
         this.waitingForColorChoice = false;
         this.hasDrawnCard = false;
         this.pendingDrawCount = 0; // Accumulated draw penalty to be taken by next player unless stacked
+        this.pendingDrawType = null; // 'draw1' | 'wilddraw2' | 'draw5' when stacking is active
         this.drawUntilColor = null; // For wilddrawcolor - draw until this color is found
         
         this.initializeDeck();
@@ -429,17 +430,14 @@ class UnoGame {
 
         console.log(`🃏 Checking if ${cardS.color} ${cardS.value} can be played on ${topS.color} ${topS.value}`);
 
-        // If there is a pending draw penalty, only allow stacking with draw cards
+        // If there is a pending draw penalty, only allow stacking with the SAME draw type
         if (this.pendingDrawCount > 0) {
-            const isStackCard = (cardS.value === 'draw1' && this.currentSide === 'light') ||
-                                (cardS.value === 'wilddraw2' && this.currentSide === 'light') ||
-                                (cardS.value === 'draw5' && this.currentSide === 'dark') ||
-                                (cardS.value === 'wilddrawcolor' && this.currentSide === 'dark');
-            if (isStackCard) {
-                console.log('✅ Stacking draw card allowed');
+            const allowed = cardS.value === this.pendingDrawType;
+            if (allowed) {
+                console.log(`✅ Stacking allowed with same type: ${this.pendingDrawType}`);
                 return true;
             }
-            console.log('❌ Must stack a draw card or take penalty');
+            console.log(`❌ Must stack a ${this.pendingDrawType} card or take penalty`);
             return false;
         }
 
@@ -497,11 +495,13 @@ class UnoGame {
             case 'draw1':
                 // Start or add to stacking penalty for light side draw1
                 this.pendingDrawCount += 1;
+                this.pendingDrawType = 'draw1';
                 // Turn advance handled in playCard
                 break;
             case 'wilddraw2':
                 // Wild Draw Two: add 2 to stacking penalty and require color choice
                 this.pendingDrawCount += 2;
+                this.pendingDrawType = 'wilddraw2';
                 // Don't advance turn yet - wait for color choice, then advance
                 break;
             case 'wilddrawcolor':
@@ -516,6 +516,7 @@ class UnoGame {
             case 'draw5':
                 // Start or add to stacking penalty for dark side, then pass turn
                 this.pendingDrawCount += 5;
+                this.pendingDrawType = 'draw5';
                 // Turn advance handled in playCard
                 break;
             case 'flip':
@@ -630,6 +631,7 @@ class UnoGame {
             player.hasUno = player.hand.length === 1;
             console.log(`📥 Penalty applied: ${player.name} drew ${this.pendingDrawCount} cards`);
             this.pendingDrawCount = 0;
+            this.pendingDrawType = null;
             this.hasDrawnCard = true;
             // After taking penalty, turn ends and passes to next
             this.nextTurn();
@@ -767,6 +769,7 @@ class UnoGame {
             waitingForColorChoice: this.waitingForColorChoice,
             hasDrawnCard: this.hasDrawnCard,
             pendingDrawCount: this.pendingDrawCount,
+            pendingDrawType: this.pendingDrawType,
             drawUntilColor: this.drawUntilColor
         };
     }

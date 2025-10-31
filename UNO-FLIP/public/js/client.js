@@ -247,31 +247,19 @@ class UnoClient {
             setOptions('light');
             this.setWildColorOptions = setOptions;
 
-            const cancelBtn = colorModal.querySelector('#cancelColor');
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', () => {
-                    // Inform server to cancel the pending wild play so the card returns to player's hand
-                    if (this.socket && this.roomCode && this.playerId) {
-                        this.socket.emit('cancelWild', {
-                            roomCode: this.roomCode,
-                            playerId: this.playerId
-                        });
-                    }
-                    this.hideColorModal();
-                    this.showMessage('Wild card play cancelled', 'warning');
-                });
-            }
-            // Allow clicking outside modal content to cancel
+            // Make modal persistent: disable closing via outside click or Escape
             colorModal.addEventListener('click', (e) => {
+                // Prevent backdrop clicks from closing
                 if (e.target === colorModal) {
-                    if (this.socket && this.roomCode && this.playerId) {
-                        this.socket.emit('cancelWild', {
-                            roomCode: this.roomCode,
-                            playerId: this.playerId
-                        });
-                    }
-                    this.hideColorModal();
-                    this.showMessage('Wild card play cancelled', 'warning');
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (this.waitingForColorChoice && (e.key === 'Escape' || e.key === 'Esc')) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 }
             });
         }
@@ -337,6 +325,11 @@ class UnoClient {
             'wild_blue': `${basePath}wild_blue.png`,
             'wild_green': `${basePath}wild_green.png`,
             'wild_yellow': `${basePath}wild_yellow.png`,
+            // Color-specific WILD +2 images (preferred if available)
+            'wild_red_plus2': `${basePath}wild_red_plus2.png`,
+            'wild_blue_plus2': `${basePath}wild_blue_plus2.png`,
+            'wild_green_plus2': `${basePath}wild_green_plus2.png`,
+            'wild_yellow_plus2': `${basePath}wild_yellow_plus2.png`,
             // Colored wild variants for dark side (map to dark palette colors)
             'wild_purple': `${basePath}wild_purple.png`,
             'wild_teal': `${basePath}wild_teal.png`,
@@ -361,12 +354,19 @@ class UnoClient {
 
         const { color, value, side } = card;
 
-        // If server provided a chosenColor on the top card, prefer that colored wild image
-        // Special-case: if this is a dark-side/light-side wilddrawcolor (draw-until) and a color was chosen,
-        // show the dedicated draw-until image instead of the plain colored wild.
+        // If server provided a chosenColor on the top card, prefer that color-specific wild image
+        // Special-cases:
+        // - wilddraw2: try wild_{color}_plus2.png first, then fallback to generic per-color wild image, then generic draw_two
+        // - wilddrawcolor: show dedicated draw-until image if available
         if (card.chosenColor) {
+            if (value === 'wilddraw2') {
+                const plus2Key = `wild_${card.chosenColor}_plus2`;
+                if (this.cardImages[plus2Key]) return this.cardImages[plus2Key];
+                const colorWildKey = `wild_${card.chosenColor}`;
+                if (this.cardImages[colorWildKey]) return this.cardImages[colorWildKey];
+                if (this.cardImages['wild_wilddraw2']) return this.cardImages['wild_wilddraw2'];
+            }
             if (value === 'wilddrawcolor') {
-                // prefer dedicated draw-until image if available
                 if (this.cardImages['wild_drawuntill']) return this.cardImages['wild_drawuntill'];
             }
             const chosenKey = `wild_${card.chosenColor}`;
@@ -947,9 +947,17 @@ class UnoClient {
     // Client-side playability check using the same rules as server: match color/value or wilds
     clientCanPlay(card, topCard) {
         if (!card || !topCard) return false;
+
+        // If there is a pending draw penalty, only the same draw type can be stacked
+        const pendingCount = this.lastGameState?.pendingDrawCount || 0;
+        const pendingType = this.lastGameState?.pendingDrawType || null;
+        if (pendingCount > 0) {
+            return card.value === pendingType;
+        }
+
         // If top card is a wild with chosenColor, it behaves like that color for matching
         const topColor = topCard.chosenColor || topCard.color;
-        if (card.color === 'wild') return true; // wild can always be played
+        if (card.color === 'wild') return true; // wild can always be played (when no pending penalty)
         if (card.color === topColor) return true;
         if (card.value === topCard.value) return true;
         return false;
