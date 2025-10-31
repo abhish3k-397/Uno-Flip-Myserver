@@ -5,14 +5,16 @@
   "main": "server/app.js",
   "scripts": {
     "start": "node server/app.js",
-    "dev": "nodemon server/app.js"
+    "dev": "nodemon server/app.js",
+    "build:assets": "esbuild public/js/client.js public/js/game.js --bundle --minify --sourcemap --outfile=public/js/bundle.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "esbuild": "^0.21.5"
   },
   "keywords": ["uno", "multiplayer", "game", "socket.io"],
   "author": "My Name",

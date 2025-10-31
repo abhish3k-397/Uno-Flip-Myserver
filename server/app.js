@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const compression = require('compression');
 
 const GameManager = require('./game');
 const SocketHandler = require('./socket');
@@ -33,7 +34,21 @@ class UnoServer {
 
     setupExpress() {
         this.app.use(express.json());
-        this.app.use(express.static(path.join(__dirname, '../public')));
+        // gzip compression
+        this.app.use(compression());
+        // Static assets with caching
+        this.app.use(express.static(path.join(__dirname, '../public'), {
+            setHeaders: (res, filePath) => {
+                const ext = path.extname(filePath).toLowerCase();
+                if (ext === '.html') {
+                    res.setHeader('Cache-Control', 'no-cache');
+                } else if (ext === '.js' || ext === '.css') {
+                    res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
+                } else if (ext === '.png' || ext === '.jpg' || ext === '.jpeg' || ext === '.gif' || ext === '.webp' || ext === '.svg') {
+                    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year
+                }
+            }
+        }));
     }
 
     setupRoutes() {
