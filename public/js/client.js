@@ -249,20 +249,24 @@ class UnoClient {
 
         // Global keyboard shortcuts (game screen)
         document.addEventListener('keydown', (e) => {
-            // Ignore when typing into inputs or modals
+            // Alt+E to toggle chat - this should be a global shortcut
+            if (e.altKey && (e.key === 'e' || e.key === 'E')) {
+                // We prevent default to stop the browser's default Alt+E behavior (e.g., opening a menu)
+                e.preventDefault();
+                this.toggleChat();
+                // We return here because no other action should be taken for this shortcut
+                return;
+            }
+
+            // Ignore other key events when typing into inputs or modals
             const tag = (document.activeElement && document.activeElement.tagName) || '';
             if (tag === 'INPUT' || tag === 'TEXTAREA') {
-                // Allow Alt+E even when typing (unless it's the chat input)
-                if (e.altKey && (e.key === 'e' || e.key === 'E') && document.activeElement.id !== 'chatInput') {
-                    e.preventDefault();
-                    this.toggleChat();
-                }
-                // Allow Enter in chat input
+                // Allow Enter in chat input to send a message
                 if (tag === 'INPUT' && e.key === 'Enter' && document.activeElement.id === 'chatInput') {
                     e.preventDefault();
                     this.sendChatMessage();
-                    return;
                 }
+                // For any other key in an input, we do nothing more.
                 return;
             }
 
@@ -270,12 +274,6 @@ class UnoClient {
             const gameActive = gameScreen && gameScreen.classList.contains('active');
             if (!gameActive) return;
 
-            // Alt+E to toggle chat
-            if (e.altKey && (e.key === 'e' || e.key === 'E')) {
-                e.preventDefault();
-                this.toggleChat();
-                return;
-            }
 
             // K to draw card
             if (e.key === 'k' || e.key === 'K') {
