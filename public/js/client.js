@@ -252,8 +252,8 @@ class UnoClient {
             // Ignore when typing into inputs or modals
             const tag = (document.activeElement && document.activeElement.tagName) || '';
             if (tag === 'INPUT' || tag === 'TEXTAREA') {
-                // Allow E even when typing (unless it's the chat input)
-                if ((e.key === 'e' || e.key === 'E') && document.activeElement.id !== 'chatInput') {
+                // Allow Alt+E even when typing (unless it's the chat input)
+                if (e.altKey && (e.key === 'e' || e.key === 'E') && document.activeElement.id !== 'chatInput') {
                     e.preventDefault();
                     this.toggleChat();
                 }
@@ -270,8 +270,8 @@ class UnoClient {
             const gameActive = gameScreen && gameScreen.classList.contains('active');
             if (!gameActive) return;
 
-            // E to toggle chat
-            if (e.key === 'e' || e.key === 'E') {
+            // Alt+E to toggle chat
+            if (e.altKey && (e.key === 'e' || e.key === 'E')) {
                 e.preventDefault();
                 this.toggleChat();
                 return;
