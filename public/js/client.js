@@ -21,6 +21,7 @@ class UnoClient {
         this.initializeColorModal();
         this.addCardStyles();
         this.createActionButtons();
+        this.initializeChat();
     }
 
     showRules() {
@@ -250,11 +251,31 @@ class UnoClient {
         document.addEventListener('keydown', (e) => {
             // Ignore when typing into inputs or modals
             const tag = (document.activeElement && document.activeElement.tagName) || '';
-            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') {
+                // Allow E even when typing (unless it's the chat input)
+                if ((e.key === 'e' || e.key === 'E') && document.activeElement.id !== 'chatInput') {
+                    e.preventDefault();
+                    this.toggleChat();
+                }
+                // Allow Enter in chat input
+                if (tag === 'INPUT' && e.key === 'Enter' && document.activeElement.id === 'chatInput') {
+                    e.preventDefault();
+                    this.sendChatMessage();
+                    return;
+                }
+                return;
+            }
 
             const gameScreen = document.getElementById('game');
             const gameActive = gameScreen && gameScreen.classList.contains('active');
             if (!gameActive) return;
+
+            // E to toggle chat
+            if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                this.toggleChat();
+                return;
+            }
 
             // K to draw card
             if (e.key === 'k' || e.key === 'K') {
@@ -739,6 +760,9 @@ class UnoClient {
         this.socket.on('chooseColor', (data) => this.onChooseColor(data));
         this.socket.on('gameMessage', (data) => this.onGameMessage(data));
         this.socket.on('drawUntilColor', (data) => this.onDrawUntilColor(data));
+
+        // Chat events
+        this.socket.on('chatMessage', (data) => this.onChatMessage(data));
     }
 
     // Lobby Methods
@@ -1642,6 +1666,142 @@ class UnoClient {
         }
         // UI feedback; the server will emit 'returnToLobby'
         this.showMessage('Resetting game...', 'info');
+    }
+
+    // Chat Methods
+    initializeChat() {
+        this.chatExpanded = false;
+        const chatWindow = document.getElementById('chatWindow');
+        const chatHeader = document.getElementById('chatHeader');
+        const chatToggleBtn = document.getElementById('chatToggleBtn');
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+
+        if (!chatWindow) {
+            console.warn('Chat window not found in DOM');
+            return;
+        }
+        
+        console.log('Chat initialized successfully');
+
+        // Toggle chat on header click
+        if (chatHeader) {
+            chatHeader.addEventListener('click', () => this.toggleChat());
+        }
+
+        // Toggle button
+        if (chatToggleBtn) {
+            chatToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleChat();
+            });
+        }
+
+        // Send button
+        if (chatSendBtn) {
+            chatSendBtn.addEventListener('click', () => this.sendChatMessage());
+        }
+
+        // Enter key to send (handled in keyboard listener)
+        if (chatInput) {
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendChatMessage();
+                }
+            });
+        }
+    }
+
+    toggleChat() {
+        const chatWindow = document.getElementById('chatWindow');
+        if (!chatWindow) return;
+
+        this.chatExpanded = !this.chatExpanded;
+        
+        if (this.chatExpanded) {
+            chatWindow.classList.add('expanded');
+            // Focus on input when expanded
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                setTimeout(() => chatInput.focus(), 100);
+            }
+            // Clear new message indicator
+            chatWindow.classList.remove('has-new-message');
+        } else {
+            chatWindow.classList.remove('expanded');
+        }
+    }
+
+    sendChatMessage() {
+        const chatInput = document.getElementById('chatInput');
+        if (!chatInput) {
+            console.error('Chat input not found');
+            return;
+        }
+        if (!this.socket) {
+            console.error('Socket not connected');
+            return;
+        }
+        if (!this.roomCode) {
+            console.error('No room code available');
+            return;
+        }
+
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        console.log('Sending chat message:', { roomCode: this.roomCode, playerName: this.playerName, message });
+
+        // Emit chat message to server
+        this.socket.emit('chatMessage', {
+            roomCode: this.roomCode,
+            playerId: this.playerId,
+            playerName: this.playerName,
+            message: message
+        });
+
+        // Clear input
+        chatInput.value = '';
+    }
+
+    onChatMessage(data) {
+        console.log('Received chat message:', data);
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            console.error('Chat messages container not found');
+            return;
+        }
+
+        // Create message element
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${data.playerId === this.playerId ? 'own' : 'other'}`;
+        
+        const timestamp = new Date(data.timestamp || Date.now());
+        const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        messageDiv.innerHTML = `
+            <div class="sender">${data.playerName || 'Unknown'}</div>
+            <div class="text">${this.escapeHtml(data.message)}</div>
+            <div class="timestamp">${timeString}</div>
+        `;
+
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Show new message indicator if chat is minimized
+        const chatWindow = document.getElementById('chatWindow');
+        if (chatWindow && !chatWindow.classList.contains('expanded')) {
+            chatWindow.classList.add('has-new-message');
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

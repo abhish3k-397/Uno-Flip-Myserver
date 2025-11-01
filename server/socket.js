@@ -23,6 +23,9 @@ class SocketHandler {
             socket.on('playAgain', (data) => this.handlePlayAgain(socket, data));
             socket.on('endTurn', (data) => this.handleEndTurn(socket, data));
 
+            // Chat events
+            socket.on('chatMessage', (data) => this.handleChatMessage(socket, data));
+
             // Disconnection
             socket.on('disconnect', () => this.handleDisconnect(socket));
         });
@@ -367,6 +370,36 @@ class SocketHandler {
 
         } catch (error) {
             console.error(`❌ Error resetting game: ${error.message}`);
+            socket.emit('error', { message: error.message });
+        }
+    }
+
+    handleChatMessage(socket, data) {
+        try {
+            const game = this.gameManager.getGameByRoomCode(data.roomCode);
+            if (!game) {
+                socket.emit('error', { message: 'Game not found' });
+                return;
+            }
+
+            // Verify player is in the game
+            const player = game.players.find(p => p.id === socket.id);
+            if (!player) {
+                socket.emit('error', { message: 'You are not in this game' });
+                return;
+            }
+
+            // Broadcast chat message to all players in the room
+            this.io.to(data.roomCode).emit('chatMessage', {
+                playerId: socket.id,
+                playerName: data.playerName || player.name,
+                message: data.message,
+                timestamp: Date.now()
+            });
+
+            console.log(`💬 ${data.playerName || player.name} sent a chat message in room ${data.roomCode}`);
+        } catch (error) {
+            console.error(`❌ Error handling chat message: ${error.message}`);
             socket.emit('error', { message: error.message });
         }
     }

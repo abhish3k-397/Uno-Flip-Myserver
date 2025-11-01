@@ -1019,6 +1019,7 @@ body[data-theme="dark"] {
 .play-area { position: relative; }
 
 .play-area-content {
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
