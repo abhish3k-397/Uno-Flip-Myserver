@@ -36,7 +36,7 @@ body {
     min-height: 100vh;
     line-height: 1.6;
     overflow-x: hidden;
-    background-image: url('../images/wall-light.png');
+    background-image: url('../images/wall-light.webp');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -62,7 +62,7 @@ body {
 }
 
 body[data-theme="dark"] {
-    background-image: url('../images/wall-dark.png');
+    background-image: url('../images/wall-dark.webp');
 }
 
 /* Minimal Topbar */
@@ -1623,21 +1623,22 @@ body[data-theme="dark"] {
 }
 
 /* Remove the old gradient backgrounds since we'll use images */
-.uno-card.red, .hand-card.red,
-.uno-card.blue, .hand-card.blue,
-.uno-card.green, .hand-card.green,
-.uno-card.yellow, .hand-card.yellow,
-.uno-card.wild, .hand-card.wild,
-.uno-card.teal, .hand-card.teal,
-.uno-card.orange, .hand-card.orange,
-.uno-card.pink, .hand-card.pink,
-.uno-card.purple, .hand-card.purple {
+/* Only remove gradient if NOT using image-card class */
+.uno-card.red:not(.image-card), .hand-card.red:not(.image-card),
+.uno-card.blue:not(.image-card), .hand-card.blue:not(.image-card),
+.uno-card.green:not(.image-card), .hand-card.green:not(.image-card),
+.uno-card.yellow:not(.image-card), .hand-card.yellow:not(.image-card),
+.uno-card.wild:not(.image-card), .hand-card.wild:not(.image-card),
+.uno-card.teal:not(.image-card), .hand-card.teal:not(.image-card),
+.uno-card.orange:not(.image-card), .hand-card.orange:not(.image-card),
+.uno-card.pink:not(.image-card), .hand-card.pink:not(.image-card),
+.uno-card.purple:not(.image-card), .hand-card.purple:not(.image-card) {
     background: none !important;
 }
 
 /* Card back styling for deck */
 .deck-card {
-    background-image: url('../images/card-back.png') !important;
+    background-image: url('../images/wild_light.webp') !important;
 }
 
 /* Card content overlay for text/symbols */
@@ -1699,21 +1700,22 @@ body[data-theme="dark"] {
 }
 
 /* Remove the old gradient backgrounds since we'll use images */
-.uno-card.red, .hand-card.red,
-.uno-card.blue, .hand-card.blue,
-.uno-card.green, .hand-card.green,
-.uno-card.yellow, .hand-card.yellow,
-.uno-card.wild, .hand-card.wild,
-.uno-card.teal, .hand-card.teal,
-.uno-card.orange, .hand-card.orange,
-.uno-card.pink, .hand-card.pink,
-.uno-card.purple, .hand-card.purple {
+/* Only remove gradient if NOT using image-card class */
+.uno-card.red:not(.image-card), .hand-card.red:not(.image-card),
+.uno-card.blue:not(.image-card), .hand-card.blue:not(.image-card),
+.uno-card.green:not(.image-card), .hand-card.green:not(.image-card),
+.uno-card.yellow:not(.image-card), .hand-card.yellow:not(.image-card),
+.uno-card.wild:not(.image-card), .hand-card.wild:not(.image-card),
+.uno-card.teal:not(.image-card), .hand-card.teal:not(.image-card),
+.uno-card.orange:not(.image-card), .hand-card.orange:not(.image-card),
+.uno-card.pink:not(.image-card), .hand-card.pink:not(.image-card),
+.uno-card.purple:not(.image-card), .hand-card.purple:not(.image-card) {
     background: none !important;
 }
 
 /* Card back styling for deck */
 .deck-card {
-    background-image: url('../images/card-back.png') !important;
+    background-image: url('../images/wild_light.webp') !important;
 }
 
 /* Card content overlay for text/symbols */

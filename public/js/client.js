@@ -331,23 +331,23 @@ class UnoClient {
 
             // Number cards (zero - nine) — keys use word names like 'one', 'two'
             for (let i = 0; i <= 9; i++) {
-                mappings[`${color}_${numberWords[i]}`] = `${basePath}${color}_${numberWords[i]}.png`;
+                mappings[`${color}_${numberWords[i]}`] = `${basePath}${color}_${numberWords[i]}.webp`;
             }
 
             // Action cards
             if (isDark) {
                 // Dark side actions (naming uses words like plus_five / skip_everyone)
-                mappings[`${color}_skipeveryone`] = `${basePath}${color}_skip_everyone.png`;
-                mappings[`${color}_draw5`] = `${basePath}${color}_plus_five.png`;
-                mappings[`${color}_reverse`] = `${basePath}${color}_reverse.png`;
-                mappings[`${color}_flip`] = `${basePath}${color}_flip.png`;
+                mappings[`${color}_skipeveryone`] = `${basePath}${color}_skip_everyone.webp`;
+                mappings[`${color}_draw5`] = `${basePath}${color}_plus_five.webp`;
+                mappings[`${color}_reverse`] = `${basePath}${color}_reverse.webp`;
+                mappings[`${color}_flip`] = `${basePath}${color}_flip.webp`;
             } else {
                 // Light side actions
-                mappings[`${color}_skip`] = `${basePath}${color}_skip.png`;
-                mappings[`${color}_reverse`] = `${basePath}${color}_reverse.png`;
+                mappings[`${color}_skip`] = `${basePath}${color}_skip.webp`;
+                mappings[`${color}_reverse`] = `${basePath}${color}_reverse.webp`;
                 // Uno Flip light side uses Draw 1 instead of Draw 2
-                mappings[`${color}_draw1`] = `${basePath}${color}_plus_one.png`;
-                mappings[`${color}_flip`] = `${basePath}${color}_flip.png`;
+                mappings[`${color}_draw1`] = `${basePath}${color}_plus_one.webp`;
+                mappings[`${color}_flip`] = `${basePath}${color}_flip.webp`;
             }
 
             return mappings;
@@ -356,8 +356,9 @@ class UnoClient {
         // Generate mappings for all colors
         const imageMappings = {
             // Card back (support both dashed and underscored names)
-            'card-back': `${basePath}card-back.png`,
-            'card_back': `${basePath}card-back.png`,
+            // TODO: Replace with actual card-back.webp when available
+            'card-back': `${basePath}wild_light.webp`,
+            'card_back': `${basePath}wild_light.webp`,
 
             // Light side colors
             ...generateColorMappings('red'),
@@ -373,35 +374,35 @@ class UnoClient {
 
             // Wild cards
             // plain wild has different images on light vs dark side
-            'wild_light': `${basePath}wild_light.png`,
-            'wild_dark': `${basePath}wild_dark.png`,
+            'wild_light': `${basePath}wild_light.webp`,
+            'wild_dark': `${basePath}wild_dark.webp`,
             // Colored wild variants for light side (these will be used when a wild is chosen to a color)
-            'wild_red': `${basePath}wild_red.png`,
-            'wild_blue': `${basePath}wild_blue.png`,
-            'wild_green': `${basePath}wild_green.png`,
-            'wild_yellow': `${basePath}wild_yellow.png`,
+            'wild_red': `${basePath}wild_red.webp`,
+            'wild_blue': `${basePath}wild_blue.webp`,
+            'wild_green': `${basePath}wild_green.webp`,
+            'wild_yellow': `${basePath}wild_yellow.webp`,
             // Color-specific WILD +2 images (preferred if available)
-            'wild_red_plus2': `${basePath}wild_red_plus2.png`,
-            'wild_blue_plus2': `${basePath}wild_blue_plus2.png`,
-            'wild_green_plus2': `${basePath}wild_green_plus2.png`,
-            'wild_yellow_plus2': `${basePath}wild_yellow_plus2.png`,
+            'wild_red_plus2': `${basePath}wild_red_plus2.webp`,
+            'wild_blue_plus2': `${basePath}wild_blue_plus2.webp`,
+            'wild_green_plus2': `${basePath}wild_green_plus2.webp`,
+            'wild_yellow_plus2': `${basePath}wild_yellow_plus2.webp`,
             // Color-specific draw-until images for dark side
-            'draw_untill_teal': `${basePath}draw_untill_teal.png`,
-            'draw_untill_orange': `${basePath}draw_untill_orange.png`,
-            'draw_untill_pink': `${basePath}draw_untill_pink.png`,
-            'draw_untill_purple': `${basePath}draw_untill_purple.png`,
+            'draw_untill_teal': `${basePath}draw_untill_teal.webp`,
+            'draw_untill_orange': `${basePath}draw_untill_orange.webp`,
+            'draw_untill_pink': `${basePath}draw_untill_pink.webp`,
+            'draw_untill_purple': `${basePath}draw_untill_purple.webp`,
             // Colored wild variants for dark side (map to dark palette colors)
-            'wild_purple': `${basePath}wild_purple.png`,
-            'wild_teal': `${basePath}wild_teal.png`,
-            'wild_orange': `${basePath}wild_orange.png`,
-            'wild_pink': `${basePath}wild_pink.png`,
-            'wild_wilddraw2': `${basePath}wild_draw_two.png`,
-            'wild_wilddrawcolor': `${basePath}draw_until.png`,
+            'wild_purple': `${basePath}wild_purple.webp`,
+            'wild_teal': `${basePath}wild_teal.webp`,
+            'wild_orange': `${basePath}wild_orange.webp`,
+            'wild_pink': `${basePath}wild_pink.webp`,
+            'wild_wilddraw2': `${basePath}wild_draw_two.webp`,
+            'wild_wilddrawcolor': `${basePath}draw_until.webp`,
             // Special image to show when a wild-draw-until (wilddrawcolor) has a chosen color
-            'wild_drawuntill': `${basePath}wild_drawuntill.png`,
+            'wild_drawuntill': `${basePath}draw_until.webp`,
 
             // Default fallback
-            'default': `${basePath}card-back.png`
+            'default': `${basePath}wild_light.webp`
         };
 
         console.log('Card images initialized with word names:', imageMappings);
@@ -416,7 +417,7 @@ class UnoClient {
 
         // If server provided a chosenColor on the top card, prefer that color-specific wild image
         // Special-cases:
-        // - wilddraw2: try wild_{color}_plus2.png first, then fallback to generic per-color wild image, then generic draw_two
+        // - wilddraw2: try wild_{color}_plus2.webp first, then fallback to generic per-color wild image, then generic draw_two
         // - wilddrawcolor: show dedicated draw-until image if available
         if (card.chosenColor) {
             if (value === 'wilddraw2') {
@@ -475,20 +476,25 @@ class UnoClient {
             if (this.cardImages[chosenKey]) return this.cardImages[chosenKey];
         }
 
-        // Handle action naming differences
-        if (lookupValue === 'draw1' || lookupValue === 'draw5') {
-            // keep as-is (card mapping uses draw1/draw5 keys)
-        }
-
-        const imagePath = this.cardImages[imageKey] || this.cardImages.default;
-
-        // Fallback: try raw value key
-        if (imagePath === this.cardImages.default && color !== 'wild') {
+        // Check if we have a direct mapping for this imageKey
+        let imagePath = this.cardImages[imageKey];
+        
+        // If not found, try fallback for action cards (draw1/draw5 use specific keys)
+        if (!imagePath && (lookupValue === 'draw1' || lookupValue === 'draw5')) {
+            // The mapping already uses draw1/draw5 keys, so imageKey should work
+            // But if it doesn't, try the raw value
             const fallbackKey = `${color}_${value}`;
-            return this.cardImages[fallbackKey] || this.cardImages.default;
+            imagePath = this.cardImages[fallbackKey];
         }
 
-        return imagePath;
+        // Final fallback: try raw value key if still not found
+        if (!imagePath && color !== 'wild') {
+            const fallbackKey = `${color}_${value}`;
+            imagePath = this.cardImages[fallbackKey];
+        }
+
+        // Return found image or default
+        return imagePath || this.cardImages.default;
     }
 
     // Debug helper to verify mapping
@@ -570,13 +576,23 @@ class UnoClient {
         
         // Set card background image (use helper to set with !important)
         const cardImage = this.getCardImage(card);
-        if (cardImage && cardImage !== this.cardImages.default) {
+        if (cardImage) {
             this.setCardBackground(cardElement, cardImage);
             cardElement.classList.add('image-card');
+            // Debug logging (remove after testing)
+            if (index === 0) {
+                console.log('Card image debug:', {
+                    card: card,
+                    imageKey: `${card.color}_${card.value}`,
+                    cardImage: cardImage,
+                    side: card.side
+                });
+            }
         } else {
             // ensure fallback to color styles if no image
             cardElement.classList.remove('image-card');
             cardElement.style.removeProperty('background-image');
+            console.warn('No image found for card:', card);
         }
 
         const displayValue = this.getCardDisplayValue(card);
