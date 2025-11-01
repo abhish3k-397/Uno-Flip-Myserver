@@ -19,6 +19,7 @@ class UnoClient {
 
         this.initializeEventListeners();
         this.initializeColorModal();
+        this.initializeChat();
         this.addCardStyles();
         this.createActionButtons();
     }
@@ -318,6 +319,30 @@ class UnoClient {
                 }
             });
         }
+    }
+
+    initializeChat() {
+        const chatContainer = document.getElementById('chatContainer');
+        const chatHeader = chatContainer.querySelector('.chat-header');
+        const closeChat = document.getElementById('closeChat');
+
+        const toggleChat = () => {
+            chatContainer.classList.toggle('collapsed');
+        };
+
+        chatHeader.addEventListener('click', toggleChat);
+        closeChat.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent header click from firing
+            toggleChat();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                if (!chatContainer.classList.contains('collapsed')) {
+                    toggleChat();
+                }
+            }
+        });
     }
 
     // UPDATED: Complete card image mapping based on your actual file names
