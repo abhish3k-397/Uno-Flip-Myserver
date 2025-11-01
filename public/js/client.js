@@ -19,7 +19,6 @@ class UnoClient {
 
         this.initializeEventListeners();
         this.initializeColorModal();
-        this.initializeChat();
         this.addCardStyles();
         this.createActionButtons();
         this.initializeChat();
@@ -340,30 +339,6 @@ class UnoClient {
                 }
             });
         }
-    }
-
-    initializeChat() {
-        const chatContainer = document.getElementById('chatContainer');
-        const chatHeader = chatContainer.querySelector('.chat-header');
-        const closeChat = document.getElementById('closeChat');
-
-        const toggleChat = () => {
-            chatContainer.classList.toggle('collapsed');
-        };
-
-        chatHeader.addEventListener('click', toggleChat);
-        closeChat.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent header click from firing
-            toggleChat();
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' || e.key === 'Esc') {
-                if (!chatContainer.classList.contains('collapsed')) {
-                    toggleChat();
-                }
-            }
-        });
     }
 
     // UPDATED: Complete card image mapping based on your actual file names
@@ -1706,7 +1681,7 @@ class UnoClient {
             console.warn('Chat window not found in DOM');
             return;
         }
-        
+
         console.log('Chat initialized successfully');
 
         // Toggle chat on header click
@@ -1736,6 +1711,15 @@ class UnoClient {
                 }
             });
         }
+
+        // Add ESC key listener to collapse chat
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                if (this.chatExpanded) {
+                    this.toggleChat();
+                }
+            }
+        });
     }
 
     toggleChat() {

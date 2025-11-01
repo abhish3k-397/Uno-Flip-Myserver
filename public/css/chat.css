@@ -4,12 +4,12 @@
     right: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 240px;
+    width: 300px; /* Increased width */
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: auto;
-    z-index: 10;
+    z-index: 1000; /* Increased z-index */
 }
 
 @media (max-width: 768px) {
@@ -23,22 +23,23 @@
 
 .chat-window {
     width: 100%;
-    max-width: 240px;
-    background: var(--surface);
-    border: 1px solid var(--ring);
+    max-width: 300px; /* Increased width */
+    background: rgba(255, 255, 255, 0.1); /* Glassy background */
+    backdrop-filter: blur(10px); /* Frosted glass effect */
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
     border-radius: 12px;
-    box-shadow: var(--shadow);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Softer shadow */
     display: flex;
     flex-direction: column;
     transition: var(--transition);
-    max-height: 400px;
+    max-height: 350px; /* Decreased height */
     min-height: 48px; /* Ensure header is always visible */
 }
 
 .chat-window.expanded {
-    max-width: 400px;
-    max-height: 600px;
-    width: 400px;
+    max-width: 450px; /* Wider when expanded */
+    max-height: 500px; /* Taller when expanded */
+    width: 450px;
 }
 
 .chat-header {
