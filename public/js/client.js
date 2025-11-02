@@ -23,6 +23,9 @@ class UnoClient {
         // Card image mapping - UPDATED with your image structure
         this.cardImages = this.initializeCardImages();
 
+        // Handle URL-based room codes
+        this.initializeFromUrl();
+
         this.initializeEventListeners();
         this.initializeColorModal();
         this.addCardStyles();
@@ -32,8 +35,132 @@ class UnoClient {
         // Preload all card images on initialization
         this.preloadCardImages();
         
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', (event) => {
+            // Check if we're navigating away from a room
+            const pathMatch = window.location.pathname.match(/^\/room\/([A-Z0-9]{6})$/i);
+            if (pathMatch) {
+                const urlRoomCode = pathMatch[1].toUpperCase();
+                // If we're still in a room, update the room code display
+                if (urlRoomCode !== this.roomCode) {
+                    // User navigated to a different room via browser history
+                    this.roomCodeFromUrl = urlRoomCode;
+                    const roomCodeInput = document.getElementById('roomCode');
+                    if (roomCodeInput) {
+                        roomCodeInput.value = urlRoomCode;
+                    }
+                }
+            } else if (window.location.pathname === '/') {
+                // User navigated back to home
+                if (this.roomCode) {
+                    // Clear room association if leaving
+                    console.log('Navigated away from room');
+                }
+            }
+        });
+        
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => this.cleanup());
+    }
+
+    /**
+     * Extract room code from URL path or query parameter
+     * Supports: /room/ABCD12 or ?room=ABCD12
+     */
+    initializeFromUrl() {
+        // Check for server-injected room code first
+        if (window.__INITIAL_ROOM_CODE__) {
+            this.roomCodeFromUrl = window.__INITIAL_ROOM_CODE__.toUpperCase();
+            return;
+        }
+
+        // Extract from URL path: /room/ABCD12
+        const pathMatch = window.location.pathname.match(/^\/room\/([A-Z0-9]{6})$/i);
+        if (pathMatch) {
+            this.roomCodeFromUrl = pathMatch[1].toUpperCase();
+            return;
+        }
+
+        // Extract from query parameter: ?room=ABCD12
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomParam = urlParams.get('room');
+        if (roomParam && /^[A-Z0-9]{6}$/i.test(roomParam)) {
+            this.roomCodeFromUrl = roomParam.toUpperCase();
+        }
+    }
+
+    /**
+     * Update URL to include room code without page reload
+     */
+    updateUrlForRoom(roomCode) {
+        if (!roomCode) return;
+
+        const newPath = `/room/${roomCode.toUpperCase()}`;
+        
+        // Update URL without page reload
+        if (window.history && window.history.pushState) {
+            window.history.pushState({ roomCode }, '', newPath);
+        }
+
+        // Update page title with room code
+        const originalTitle = document.title.split(' - ')[0] || 'UNO Flip';
+        document.title = `${originalTitle} - Room ${roomCode}`;
+    }
+
+    /**
+     * Clear room code from URL (return to home)
+     */
+    clearUrlRoom() {
+        if (window.history && window.history.pushState) {
+            window.history.pushState({}, '', '/');
+        }
+        const originalTitle = document.title.split(' - ')[0] || 'UNO Flip';
+        document.title = originalTitle;
+    }
+
+    /**
+     * Copy room URL to clipboard
+     */
+    copyRoomUrl() {
+        if (!this.roomCode) {
+            this.showMessage('No room code available', 'error');
+            return;
+        }
+
+        const roomUrl = `${window.location.origin}/room/${this.roomCode}`;
+        
+        // Use Clipboard API if available
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(roomUrl).then(() => {
+                this.showMessage('Room URL copied to clipboard!', 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                this.fallbackCopyRoomUrl(roomUrl);
+            });
+        } else {
+            // Fallback for older browsers
+            this.fallbackCopyRoomUrl(roomUrl);
+        }
+    }
+
+    /**
+     * Fallback method to copy room URL (for older browsers)
+     */
+    fallbackCopyRoomUrl(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            this.showMessage('Room URL copied to clipboard!', 'success');
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            this.showMessage(`Room URL: ${text}`, 'info');
+        }
+        document.body.removeChild(textArea);
     }
 
     showRules() {
@@ -219,6 +346,20 @@ class UnoClient {
     }
 
     initializeEventListeners() {
+        // Auto-populate room code from URL if present
+        if (this.roomCodeFromUrl) {
+            const roomCodeInput = document.getElementById('roomCode');
+            if (roomCodeInput) {
+                roomCodeInput.value = this.roomCodeFromUrl;
+                // Show a visual indicator that room code was loaded from URL
+                roomCodeInput.classList.add('room-from-url');
+                roomCodeInput.setAttribute('title', 'Room code loaded from URL');
+                
+                // Optional: Show info message about URL room code
+                console.log(`🔗 Room code found in URL: ${this.roomCodeFromUrl}`);
+            }
+        }
+
         // Lobby events
         document.getElementById('createGame').addEventListener('click', () => this.createGame());
         document.getElementById('joinGame').addEventListener('click', () => this.joinGame());
@@ -897,7 +1038,10 @@ class UnoClient {
 
     joinGame() {
         const playerName = document.getElementById('playerName').value.trim();
-        const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
+        
+        // Prefer URL-based room code, then form input
+        let roomCode = this.roomCodeFromUrl || 
+                      document.getElementById('roomCode').value.trim().toUpperCase();
 
         if (!playerName) {
             this.showMessage('Please enter your name', 'error');
@@ -906,6 +1050,12 @@ class UnoClient {
 
         if (!roomCode) {
             this.showMessage('Please enter a room code', 'error');
+            return;
+        }
+
+        // Validate room code format
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            this.showMessage('Room code must be 6 characters (letters and numbers)', 'error');
             return;
         }
 
@@ -925,6 +1075,13 @@ class UnoClient {
         this.roomCode = data.roomCode;
         this.showMessage(`🎮 Game created! Room code: ${data.roomCode}`, 'success');
         document.getElementById('roomIdDisplay').textContent = data.roomCode;
+        
+        // Update URL with room code
+        this.updateUrlForRoom(data.roomCode);
+        
+        // Add share button to room code display
+        this.addShareRoomButton();
+        
         this.updateLobby(data);
     }
 
@@ -932,7 +1089,41 @@ class UnoClient {
         this.roomCode = data.roomCode;
         this.showMessage(`🔗 Joined game: ${data.roomCode}`, 'success');
         document.getElementById('roomIdDisplay').textContent = data.roomCode;
+        
+        // Update URL with room code
+        this.updateUrlForRoom(data.roomCode);
+        
+        // Add share button to room code display
+        this.addShareRoomButton();
+        
         this.updateLobby(data);
+    }
+
+    /**
+     * Add a share button next to the room code display
+     */
+    addShareRoomButton() {
+        const roomIdDisplay = document.getElementById('roomIdDisplay');
+        if (!roomIdDisplay || document.getElementById('shareRoomBtn')) return;
+
+        const shareBtn = document.createElement('button');
+        shareBtn.id = 'shareRoomBtn';
+        shareBtn.className = 'icon-btn share-btn';
+        shareBtn.innerHTML = '<i class="fas fa-share-alt"></i>';
+        shareBtn.title = 'Copy room URL';
+        shareBtn.setAttribute('aria-label', 'Copy room URL');
+        shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.copyRoomUrl();
+        });
+
+        // Insert after the room code display parent
+        const roomCodeItem = roomIdDisplay.closest('.info-item');
+        if (roomCodeItem) {
+            shareBtn.style.marginLeft = '8px';
+            shareBtn.style.fontSize = '0.9em';
+            roomCodeItem.appendChild(shareBtn);
+        }
     }
 
     updateLobby(data) {
@@ -1760,8 +1951,11 @@ class UnoClient {
         if (!preserveRoom) {
             this.roomCode = null;
             if (roomIdEl) roomIdEl.textContent = '-----';
+            // Clear room code from URL when leaving room completely
+            this.clearUrlRoom();
         } else {
             if (roomIdEl && this.roomCode) roomIdEl.textContent = this.roomCode;
+            // Keep URL with room code if preserving room
         }
         // Reset UI elements specific to game view
         const handEl = document.getElementById('playerHand');

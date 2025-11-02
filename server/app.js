@@ -81,10 +81,10 @@ class UnoServer {
     }
 
     setupRoutes() {
-        this.app.get('/', (req, res) => {
+        // Helper function to serve HTML with bundle versioning
+        const serveHtml = (res, roomCode = null) => {
             const htmlPath = path.join(__dirname, '../public/index.html');
             
-            // If bundle hash is available, inject it into HTML for cache busting
             if (this.bundleHash) {
                 fs.readFile(htmlPath, 'utf8', (err, data) => {
                     if (err) {
@@ -92,17 +92,108 @@ class UnoServer {
                     }
                     
                     // Inject version query string into bundle.js reference
-                    const versionedHtml = data.replace(
+                    let versionedHtml = data.replace(
                         /src="js\/bundle\.js"/g,
                         `src="js/bundle.js?v=${this.bundleHash}"`
                     );
+                    
+                    // Inject room code into page if provided
+                    if (roomCode) {
+                        // Try to find the bundle.js script tag and inject before it
+                        const scriptPattern = /(<script[^>]*src="js\/bundle\.js[^"]*"[^>]*><\/script>)/i;
+                        if (scriptPattern.test(versionedHtml)) {
+                            versionedHtml = versionedHtml.replace(
+                                scriptPattern,
+                                `<script>window.__INITIAL_ROOM_CODE__ = '${roomCode}';</script>\n    $1`
+                            );
+                        } else {
+                            // Fallback: inject in head if script tag pattern not found
+                            versionedHtml = versionedHtml.replace(
+                                '</head>',
+                                `<script>window.__INITIAL_ROOM_CODE__ = '${roomCode}';</script>\n    </head>`
+                            );
+                        }
+                    }
                     
                     res.setHeader('Content-Type', 'text/html');
                     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
                     res.send(versionedHtml);
                 });
             } else {
-                res.sendFile(htmlPath);
+                // Without bundle hash, still inject room code if needed
+                if (roomCode) {
+                    fs.readFile(htmlPath, 'utf8', (err, data) => {
+                        if (err) {
+                            return res.status(500).send('Error loading page');
+                        }
+                        // Try to find the bundle.js script tag and inject before it
+                        const scriptPattern = /(<script[^>]*src="js\/bundle\.js"[^>]*><\/script>)/i;
+                        let modifiedHtml = data;
+                        if (scriptPattern.test(modifiedHtml)) {
+                            modifiedHtml = modifiedHtml.replace(
+                                scriptPattern,
+                                `<script>window.__INITIAL_ROOM_CODE__ = '${roomCode}';</script>\n    $1`
+                            );
+                        } else {
+                            // Fallback: inject in head if script tag pattern not found
+                            modifiedHtml = modifiedHtml.replace(
+                                '</head>',
+                                `<script>window.__INITIAL_ROOM_CODE__ = '${roomCode}';</script>\n    </head>`
+                            );
+                        }
+                        res.setHeader('Content-Type', 'text/html');
+                        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+                        res.send(modifiedHtml);
+                    });
+                } else {
+                    res.sendFile(htmlPath);
+                }
+            }
+        };
+
+        // Root route - for creating new games
+        this.app.get('/', (req, res) => {
+            serveHtml(res);
+        });
+
+        // Room route - for joining existing games via URL
+        this.app.get('/room/:roomCode', (req, res) => {
+            const roomCode = req.params.roomCode.trim().toUpperCase();
+            
+            // Validate room code format
+            if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+                return res.redirect('/');
+            }
+            
+            // Serve HTML with room code context
+            serveHtml(res, roomCode);
+        });
+
+        // API endpoint to check if room exists
+        this.app.get('/api/room/:roomCode', (req, res) => {
+            const roomCode = req.params.roomCode.trim().toUpperCase();
+            
+            if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+                return res.status(400).json({ 
+                    exists: false, 
+                    error: 'Invalid room code format' 
+                });
+            }
+            
+            const game = this.gameManager.getGameByRoomCode(roomCode);
+            if (game) {
+                res.json({ 
+                    exists: true, 
+                    roomCode: roomCode,
+                    playerCount: game.players.length,
+                    maxPlayers: 6,
+                    gameStarted: game.gameStarted || false
+                });
+            } else {
+                res.json({ 
+                    exists: false, 
+                    roomCode: roomCode 
+                });
             }
         });
 
