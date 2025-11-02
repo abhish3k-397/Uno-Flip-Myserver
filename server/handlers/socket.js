@@ -1,7 +1,7 @@
-const rateLimiter = require('./utils/rateLimiter');
-const Validator = require('./utils/validator');
-const Sanitizer = require('./utils/sanitizer');
-const { handleSocketError, ValidationError, NotFoundError, UnauthorizedError } = require('./utils/errors');
+const rateLimiter = require('../utils/rateLimiter');
+const Validator = require('../utils/validator');
+const Sanitizer = require('../utils/sanitizer');
+const { handleSocketError, ValidationError, NotFoundError, UnauthorizedError } = require('../utils/errors');
 
 class SocketHandler {
     constructor(io, gameManager) {

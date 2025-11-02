@@ -41,17 +41,17 @@ class GameManager {
     joinGame(roomCode, player) {
         const game = this.games.get(roomCode);
         if (!game) {
-            const { NotFoundError } = require('./utils/errors');
+            const { NotFoundError } = require('../utils/errors');
             throw new NotFoundError('Game not found');
         }
 
         if (game.players.length >= 6) {
-            const { ConflictError } = require('./utils/errors');
+            const { ConflictError } = require('../utils/errors');
             throw new ConflictError('Game is full (max 6 players)');
         }
 
         if (game.gameStarted) {
-            const { ConflictError } = require('./utils/errors');
+            const { ConflictError } = require('../utils/errors');
             throw new ConflictError('Game has already started');
         }
 

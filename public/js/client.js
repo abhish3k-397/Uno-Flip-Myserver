@@ -7,12 +7,16 @@ class UnoClient {
         this.isMyTurn = false;
         this.hasDrawnCard = false;
         this.waitingForColorChoice = false;
-    this.pendingPlay = null; // { index, card }
+        this.pendingPlay = null; // { index, card }
         this.currentWildCardIndex = null;
         this.currentSide = 'light';
         this.gameStartTime = null;
         this.handLayout = 'flat'; // 'flat' | 'fan'
         this.currentHand = [];
+        
+        // Track event listeners for cleanup
+        this.socketListeners = new Map();
+        this.domListeners = [];
         
         // Card image mapping - UPDATED with your image structure
         this.cardImages = this.initializeCardImages();
@@ -22,6 +26,9 @@ class UnoClient {
         this.addCardStyles();
         this.createActionButtons();
         this.initializeChat();
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => this.cleanup());
     }
 
     showRules() {
@@ -718,13 +725,24 @@ class UnoClient {
     }
 
     setupSocketListeners() {
+        if (!this.socket) return;
+
+        // Helper to track listeners
+        const addListener = (event, handler) => {
+            this.socket.on(event, handler);
+            if (!this.socketListeners.has(event)) {
+                this.socketListeners.set(event, []);
+            }
+            this.socketListeners.get(event).push(handler);
+        };
+
         // Connection events
-        this.socket.on('disconnect', () => {
+        addListener('disconnect', () => {
             this.showMessage('Disconnected from server', 'error');
         });
 
         // Server error handler - also revert any pending UI play
-        this.socket.on('error', (data) => {
+        addListener('error', (data) => {
             console.error('Server error:', data.message);
             this.showMessage(data.message, 'error');
             // If we have a pending play (client removed visually), revert UI to server's authoritative state
@@ -735,32 +753,76 @@ class UnoClient {
             }
         });
 
+        addListener('validationError', (data) => {
+            this.showMessage(data.message || 'Validation error', 'error');
+        });
+
+        addListener('rateLimitExceeded', (data) => {
+            this.showMessage('Too many requests. Please slow down.', 'warning');
+        });
+
         // Lobby events
-        this.socket.on('lobbyUpdate', (data) => this.updateLobby(data));
-        this.socket.on('gameCreated', (data) => this.onGameCreated(data));
-        this.socket.on('joinSuccess', (data) => this.onJoinSuccess(data));
-        this.socket.on('joinError', (data) => this.showMessage(data.message, 'error'));
+        addListener('lobbyUpdate', (data) => this.updateLobby(data));
+        addListener('gameCreated', (data) => this.onGameCreated(data));
+        addListener('joinSuccess', (data) => this.onJoinSuccess(data));
+        addListener('joinError', (data) => this.showMessage(data.message, 'error'));
 
         // Game events
-        this.socket.on('gameStart', (data) => this.onGameStart(data));
-        this.socket.on('gameStateUpdate', (data) => this.updateGameState(data));
-        this.socket.on('playerTurn', (data) => this.onPlayerTurn(data));
-        this.socket.on('cardPlayed', (data) => this.onCardPlayed(data));
-        this.socket.on('cardDrawn', (data) => this.onCardDrawn(data));
-        this.socket.on('unoCalled', (data) => this.onUnoCalled(data));
-        this.socket.on('gameFlipped', (data) => this.onGameFlipped(data));
-        this.socket.on('gameOver', (data) => this.onGameOver(data));
-        this.socket.on('playerLeft', (data) => this.onPlayerLeft(data));
-        this.socket.on('wildColorChosen', (data) => this.onWildColorChosen(data));
-        this.socket.on('returnToLobby', () => this.returnToLobby());
+        addListener('gameStart', (data) => this.onGameStart(data));
+        addListener('gameStateUpdate', (data) => this.updateGameState(data));
+        addListener('playerTurn', (data) => this.onPlayerTurn(data));
+        addListener('cardPlayed', (data) => this.onCardPlayed(data));
+        addListener('cardDrawn', (data) => this.onCardDrawn(data));
+        addListener('unoCalled', (data) => this.onUnoCalled(data));
+        addListener('gameFlipped', (data) => this.onGameFlipped(data));
+        addListener('gameOver', (data) => this.onGameOver(data));
+        addListener('playerLeft', (data) => this.onPlayerLeft(data));
+        addListener('wildColorChosen', (data) => this.onWildColorChosen(data));
+        addListener('returnToLobby', () => this.returnToLobby());
 
         // Special events
-        this.socket.on('chooseColor', (data) => this.onChooseColor(data));
-        this.socket.on('gameMessage', (data) => this.onGameMessage(data));
-        this.socket.on('drawUntilColor', (data) => this.onDrawUntilColor(data));
+        addListener('chooseColor', (data) => this.onChooseColor(data));
+        addListener('gameMessage', (data) => this.onGameMessage(data));
+        addListener('drawUntilColor', (data) => this.onDrawUntilColor(data));
 
         // Chat events
-        this.socket.on('chatMessage', (data) => this.onChatMessage(data));
+        addListener('chatMessage', (data) => this.onChatMessage(data));
+    }
+
+    /**
+     * Cleanup method to prevent memory leaks
+     */
+    cleanup() {
+        // Remove all socket listeners
+        if (this.socket) {
+            for (const [event, handlers] of this.socketListeners.entries()) {
+                handlers.forEach(handler => {
+                    this.socket.off(event, handler);
+                });
+            }
+            this.socketListeners.clear();
+            
+            // Disconnect socket
+            if (this.socket.connected) {
+                this.socket.disconnect();
+            }
+            this.socket = null;
+        }
+
+        // Remove DOM event listeners
+        this.domListeners.forEach(({ element, event, handler }) => {
+            if (element && typeof element.removeEventListener === 'function') {
+                element.removeEventListener(event, handler);
+            }
+        });
+        this.domListeners = [];
+
+        // Clear state
+        this.pendingPlay = null;
+        this.lastGameState = null;
+        this.currentHand = [];
+        
+        console.log('🧹 Client cleanup complete');
     }
 
     // Lobby Methods

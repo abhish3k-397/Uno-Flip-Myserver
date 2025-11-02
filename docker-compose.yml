@@ -4,11 +4,9 @@ services:
   app:
     build:
       context: .
-    env_file:
-      - .env
     environment:
       - NODE_ENV=production
     ports:
-      - "${PORT:-3000}:3000"
+      - "3000:3000"
     restart: unless-stopped
 
