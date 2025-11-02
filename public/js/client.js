@@ -457,7 +457,7 @@ class UnoClient {
             link.rel = 'preload';
             link.as = 'image';
             link.href = url;
-            link.crossOrigin = 'anonymous';
+            // Don't set crossorigin for same-origin resources
             document.head.appendChild(link);
         });
         
