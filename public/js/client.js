@@ -29,6 +29,9 @@ class UnoClient {
         this.createActionButtons();
         this.initializeChat();
         
+        // Preload all card images on initialization
+        this.preloadCardImages();
+        
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => this.cleanup());
     }
@@ -435,6 +438,52 @@ class UnoClient {
 
         console.log('Card images initialized with word names:', imageMappings);
         return imageMappings;
+    }
+
+    /**
+     * Preload all card images on page load for instant display
+     * Uses link preload and Image objects for maximum browser compatibility
+     */
+    preloadCardImages() {
+        const imageUrls = new Set(Object.values(this.cardImages));
+        let loadedCount = 0;
+        const totalImages = imageUrls.size;
+        
+        console.log(`🖼️  Preloading ${totalImages} card images...`);
+        
+        // Add link preload tags to head for better browser optimization
+        imageUrls.forEach(url => {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'image';
+            link.href = url;
+            link.crossOrigin = 'anonymous';
+            document.head.appendChild(link);
+        });
+        
+        // Also preload using Image objects for immediate cache population
+        const preloadPromises = Array.from(imageUrls).map(url => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    loadedCount++;
+                    if (loadedCount === totalImages) {
+                        console.log(`✅ All ${totalImages} card images preloaded!`);
+                    }
+                    resolve();
+                };
+                img.onerror = (err) => {
+                    console.warn(`⚠️  Failed to preload image: ${url}`, err);
+                    resolve(); // Don't fail on individual image errors
+                };
+                img.src = url;
+            });
+        });
+        
+        // Optionally wait for all images (but don't block UI)
+        Promise.all(preloadPromises).catch(err => {
+            console.warn('Some images failed to preload:', err);
+        });
     }
 
     // UPDATED: Get the correct image for a card based on color, value, and side
