@@ -1,3 +1,5 @@
+import { io } from 'socket.io-client';
+
 class UnoClient {
     constructor() {
         this.socket = null;
