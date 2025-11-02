@@ -203,7 +203,7 @@ class UnoServer {
 
     start() {
         this.app.set('trust proxy', 1);
-        this.server.listen(() => {
+        this.server.listen(3000, '0.0.0.0', () => {
             console.log(`🚀 UNO Flip Server running`);
         });
     }
