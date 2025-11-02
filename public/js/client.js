@@ -27,6 +27,9 @@ class UnoClient {
         this.addCardStyles();
         this.createActionButtons();
         this.initializeChat();
+        
+        // Preload all card images on initialization
+        this.preloadCardImages();
     }
 
     /**
@@ -465,10 +468,10 @@ class UnoClient {
         // Helper function to generate image mappings for a color
         const generateColorMappings = (color, isDark = false) => {
             const mappings = {};
-            const numberWords = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+            const numberWords = ['one','two','three','four','five','six','seven','eight','nine'];
 
             // Number cards (zero - nine) — keys use word names like 'one', 'two'
-            for (let i = 0; i <= 9; i++) {
+            for (let i = 1; i <= 9; i++) {
                 mappings[`${color}_${numberWords[i]}`] = `${basePath}${color}_${numberWords[i]}.webp`;
             }
 
@@ -548,48 +551,57 @@ class UnoClient {
     }
 
     /**
-     * Preload all card images on page load for instant display
-     * Uses link preload and Image objects for maximum browser compatibility
+     * Fetch all card images on page load
+     * Uses fetch API with cache: 'reload' to force fresh fetch from server
      */
     preloadCardImages() {
         const imageUrls = new Set(Object.values(this.cardImages));
         let loadedCount = 0;
         const totalImages = imageUrls.size;
         
-        console.log(`🖼️  Preloading ${totalImages} card images...`);
+        console.log(`🖼️  Fetching ${totalImages} card images on page load...`);
         
-        // Add link preload tags to head for better browser optimization
-        imageUrls.forEach(url => {
-            const link = document.createElement('link');
-            link.rel = 'preload';
-            link.as = 'image';
-            link.href = url;
-            // Don't set crossorigin for same-origin resources
-            document.head.appendChild(link);
-        });
-        
-        // Also preload using Image objects for immediate cache population
-        const preloadPromises = Array.from(imageUrls).map(url => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === totalImages) {
-                        console.log(`✅ All ${totalImages} card images preloaded!`);
-                    }
-                    resolve();
-                };
-                img.onerror = (err) => {
-                    console.warn(`⚠️  Failed to preload image: ${url}`, err);
-                    resolve(); // Don't fail on individual image errors
-                };
-                img.src = url;
+        // Fetch all images from server on page load
+        const fetchPromises = Array.from(imageUrls).map(url => {
+            return fetch(url, { 
+                cache: 'reload'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${response.status}`);
+                }
+                // After fetching, also load it as an Image to ensure it's in the browser cache
+                return response.blob().then(blob => {
+                    const objectUrl = URL.createObjectURL(blob);
+                    const img = new Image();
+                    return new Promise((resolve) => {
+                        img.onload = () => {
+                            loadedCount++;
+                            URL.revokeObjectURL(objectUrl); // Clean up after load
+                            if (loadedCount === totalImages) {
+                                console.log(`✅ All ${totalImages} card images fetched and loaded!`);
+                            }
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            URL.revokeObjectURL(objectUrl); // Clean up on error too
+                            loadedCount++;
+                            resolve(); // Continue even if image load fails
+                        };
+                        img.src = objectUrl;
+                    });
+                });
+            })
+            .catch(err => {
+                console.warn(`⚠️  Failed to fetch image: ${url}`, err);
+                loadedCount++;
+                return Promise.resolve();
             });
         });
         
-        // Optionally wait for all images (but don't block UI)
-        Promise.all(preloadPromises).catch(err => {
-            console.warn('Some images failed to preload:', err);
+        // Wait for all images to be fetched
+        Promise.all(fetchPromises).catch(err => {
+            console.warn('Some images failed to fetch:', err);
         });
     }
 

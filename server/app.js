@@ -8,24 +8,12 @@ const fs = require('fs');
 
 const GameManager = require('./game');
 const SocketHandler = require('./socket');
-const config = require('./config');
 
 class UnoServer {
     constructor() {
         this.app = express();
         this.server = http.createServer(this.app);
-        this.io = socketIo(this.server, {
-            cors: {
-                origin: (origin, callback) => {
-                    const allowed = config.allowedOrigins;
-                    if (!allowed || allowed.length === 0) return callback(null, true);
-                    if (!origin) return callback(null, true);
-                    if (allowed.includes(origin)) return callback(null, true);
-                    return callback(new Error('Not allowed by CORS'));
-                },
-                methods: ["GET", "POST"]
-            }
-        });
+        this.io = socketIo(this.server);
         
         this.gameManager = new GameManager();
         this.socketHandler = new SocketHandler(this.io, this.gameManager);
@@ -213,17 +201,16 @@ class UnoServer {
         });
     }
 
-    start(port = 3000) {
+    start() {
         this.app.set('trust proxy', 1);
-        this.server.listen(port, '0.0.0.0', () => {
-            console.log(`🚀 UNO Flip Server running on port ${port}`);
-            console.log(`📱 Access the game at: http://localhost:${port}`);
+        this.server.listen(() => {
+            console.log(`🚀 UNO Flip Server running`);
         });
     }
 }
 
 // Start the server
 const server = new UnoServer();
-server.start(config.port);
+server.start();
 
 module.exports = UnoServer;
