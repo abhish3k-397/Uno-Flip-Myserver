@@ -1,14 +1,8 @@
-const rateLimiter = require('./utils/rateLimiter');
-const Validator = require('./utils/validator');
-const Sanitizer = require('./utils/sanitizer');
-const { handleSocketError, ValidationError, NotFoundError, UnauthorizedError } = require('./utils/errors');
 
 class SocketHandler {
     constructor(io, gameManager) {
         this.io = io;
         this.gameManager = gameManager;
-        // Track socket event listeners for cleanup
-        this.socketHandlers = new Map();
         this.setupSocketHandlers();
     }
 
@@ -16,180 +10,118 @@ class SocketHandler {
         this.io.on('connection', (socket) => {
             console.log(`🔗 Player connected: ${socket.id}`);
 
-            // Store handlers for cleanup
-            const handlers = [];
-
-            // Wrapper to add rate limiting and error handling
-            const wrapHandler = (eventType, handler) => {
-                return (data) => {
-                    // Rate limiting
-                    const rateLimit = rateLimiter.check(socket.id, eventType);
-                    if (!rateLimit.allowed) {
-                        socket.emit('error', {
-                            message: 'Too many requests. Please slow down.',
-                            code: 'RATE_LIMIT_EXCEEDED',
-                            resetAt: rateLimit.resetAt
-                        });
-                        return;
-                    }
-
-                    // Wrap handler with error handling
-                    try {
-                        handler(data);
-                    } catch (error) {
-                        handleSocketError(error, socket, eventType);
-                    }
-                };
-            };
-
             // Lobby events
-            const createGameHandler = wrapHandler('createGame', (data) => this.handleCreateGame(socket, data));
-            socket.on('createGame', createGameHandler);
-            handlers.push({ event: 'createGame', handler: createGameHandler });
-
-            const joinGameHandler = wrapHandler('joinGame', (data) => this.handleJoinGame(socket, data));
-            socket.on('joinGame', joinGameHandler);
-            handlers.push({ event: 'joinGame', handler: joinGameHandler });
-
-            const startGameHandler = wrapHandler('startGame', (data) => this.handleStartGame(socket, data));
-            socket.on('startGame', startGameHandler);
-            handlers.push({ event: 'startGame', handler: startGameHandler });
+            socket.on('createGame', (data) => this.handleCreateGame(socket, data));
+            socket.on('joinGame', (data) => this.handleJoinGame(socket, data));
+            socket.on('startGame', (data) => this.handleStartGame(socket, data));
 
             // Game events
-            const playCardHandler = wrapHandler('playCard', (data) => this.handlePlayCard(socket, data));
-            socket.on('playCard', playCardHandler);
-            handlers.push({ event: 'playCard', handler: playCardHandler });
-
-            const drawCardHandler = wrapHandler('drawCard', (data) => this.handleDrawCard(socket, data));
-            socket.on('drawCard', drawCardHandler);
-            handlers.push({ event: 'drawCard', handler: drawCardHandler });
-
-            const sayUnoHandler = wrapHandler('sayUno', (data) => this.handleSayUno(socket, data));
-            socket.on('sayUno', sayUnoHandler);
-            handlers.push({ event: 'sayUno', handler: sayUnoHandler });
-
-            const chooseWildColorHandler = wrapHandler('chooseWildColor', (data) => this.handleWildColor(socket, data));
-            socket.on('chooseWildColor', chooseWildColorHandler);
-            handlers.push({ event: 'chooseWildColor', handler: chooseWildColorHandler });
-
-            const playAgainHandler = wrapHandler('playAgain', (data) => this.handlePlayAgain(socket, data));
-            socket.on('playAgain', playAgainHandler);
-            handlers.push({ event: 'playAgain', handler: playAgainHandler });
-
-            const endTurnHandler = wrapHandler('endTurn', (data) => this.handleEndTurn(socket, data));
-            socket.on('endTurn', endTurnHandler);
-            handlers.push({ event: 'endTurn', handler: endTurnHandler });
+            socket.on('playCard', (data) => this.handlePlayCard(socket, data));
+            socket.on('drawCard', (data) => this.handleDrawCard(socket, data));
+            socket.on('sayUno', (data) => this.handleSayUno(socket, data));
+            socket.on('chooseWildColor', (data) => this.handleWildColor(socket, data));
+            socket.on('playAgain', (data) => this.handlePlayAgain(socket, data));
+            socket.on('endTurn', (data) => this.handleEndTurn(socket, data));
 
             // Chat events
-            const chatMessageHandler = wrapHandler('chatMessage', (data) => this.handleChatMessage(socket, data));
-            socket.on('chatMessage', chatMessageHandler);
-            handlers.push({ event: 'chatMessage', handler: chatMessageHandler });
-
-            // Store handlers for cleanup
-            this.socketHandlers.set(socket.id, handlers);
+            socket.on('chatMessage', (data) => this.handleChatMessage(socket, data));
 
             // Disconnection
-            const disconnectHandler = () => this.handleDisconnect(socket);
-            socket.on('disconnect', disconnectHandler);
-            handlers.push({ event: 'disconnect', handler: disconnectHandler });
+            socket.on('disconnect', () => this.handleDisconnect(socket));
         });
     }
 
     // Lobby Handlers
     handleCreateGame(socket, data) {
-        // Validate and sanitize input
-        const nameValidation = Validator.validatePlayerName(data?.playerName);
-        if (!nameValidation.valid) {
-            throw new ValidationError(nameValidation.error);
+        try {
+            const game = this.gameManager.createGame({
+                id: socket.id,
+                name: data.playerName
+            });
+
+            socket.join(game.roomCode);
+            
+            socket.emit('gameCreated', {
+                roomCode: game.roomCode,
+                players: game.players
+            });
+
+            this.updateLobby(game.roomCode);
+            
+            console.log(`🎮 Game created: ${game.roomCode} by ${data.playerName}`);
+        } catch (error) {
+            console.error(`❌ Error creating game: ${error.message}`);
+            socket.emit('joinError', { message: error.message });
         }
-
-        const game = this.gameManager.createGame({
-            id: socket.id,
-            name: Sanitizer.sanitizePlayerName(nameValidation.sanitized)
-        });
-
-        socket.join(game.roomCode);
-        
-        socket.emit('gameCreated', {
-            roomCode: game.roomCode,
-            players: game.players
-        });
-
-        this.updateLobby(game.roomCode);
-        
-        console.log(`🎮 Game created: ${game.roomCode} by ${game.players[0].name}`);
     }
 
     handleJoinGame(socket, data) {
-        // Validate and sanitize inputs
-        const nameValidation = Validator.validatePlayerName(data?.playerName);
-        if (!nameValidation.valid) {
-            throw new ValidationError(nameValidation.error);
+        try {
+            const game = this.gameManager.joinGame(data.roomCode, {
+                id: socket.id,
+                name: data.playerName
+            });
+
+            socket.join(game.roomCode);
+            
+            socket.emit('joinSuccess', {
+                roomCode: game.roomCode,
+                players: game.players
+            });
+
+            this.updateLobby(game.roomCode);
+            
+            console.log(`👤 ${data.playerName} joined game: ${data.roomCode}`);
+        } catch (error) {
+            console.error(`❌ Error joining game: ${error.message}`);
+            socket.emit('joinError', { message: error.message });
         }
-
-        const roomCodeValidation = Validator.validateRoomCode(data?.roomCode);
-        if (!roomCodeValidation.valid) {
-            throw new ValidationError(roomCodeValidation.error);
-        }
-
-        const game = this.gameManager.joinGame(roomCodeValidation.sanitized, {
-            id: socket.id,
-            name: Sanitizer.sanitizePlayerName(nameValidation.sanitized)
-        });
-
-        socket.join(game.roomCode);
-        
-        socket.emit('joinSuccess', {
-            roomCode: game.roomCode,
-            players: game.players
-        });
-
-        this.updateLobby(game.roomCode);
-        
-        console.log(`👤 ${game.players.find(p => p.id === socket.id)?.name} joined game: ${game.roomCode}`);
     }
 
     handleStartGame(socket, data) {
-        const roomCodeValidation = Validator.validateRoomCode(data?.roomCode);
-        if (!roomCodeValidation.valid) {
-            throw new ValidationError(roomCodeValidation.error);
-        }
-
-        const game = this.gameManager.getGameByRoomCode(roomCodeValidation.sanitized);
-        if (!game) {
-            throw new NotFoundError('Game not found');
-        }
-
-        // Only host can start the game
-        if (game.players[0].id !== socket.id) {
-            throw new UnauthorizedError('Only the host can start the game');
-        }
-
-        console.log(`🎲 Starting game in room: ${game.roomCode}`);
-        game.startGame();
-
-        // Send game start to all players in the room with their individual hands
-        game.players.forEach(player => {
-            const playerSocket = this.io.sockets.sockets.get(player.id);
-            if (playerSocket) {
-                const gameState = {
-                    ...game.getPublicGameState(),
-                    playerHand: game.getPlayerHand(player.id)
-                };
-                
-                console.log(`📤 Sending game start to ${player.name} with ${gameState.playerHand.length} cards`);
-                playerSocket.emit('gameStart', gameState);
+        try {
+            const game = this.gameManager.getGameByRoomCode(data.roomCode);
+            if (!game) {
+                socket.emit('error', { message: 'Game not found' });
+                return;
             }
-        });
 
-        // Notify whose turn it is
-        this.io.to(game.roomCode).emit('playerTurn', {
-            playerId: game.currentPlayer.id,
-            playerName: game.currentPlayer.name
-        });
+            // Only host can start the game
+            if (game.players[0].id !== socket.id) {
+                socket.emit('error', { message: 'Only the host can start the game' });
+                return;
+            }
 
-        console.log(`🎲 Game started successfully in room: ${game.roomCode}`);
-        console.log(`🔄 First turn: ${game.currentPlayer.name}`);
+            console.log(`🎲 Starting game in room: ${data.roomCode}`);
+            game.startGame();
+
+            // Send game start to all players in the room with their individual hands
+            game.players.forEach(player => {
+                const playerSocket = this.io.sockets.sockets.get(player.id);
+                if (playerSocket) {
+                    const gameState = {
+                        ...game.getPublicGameState(),
+                        playerHand: game.getPlayerHand(player.id)
+                    };
+                    
+                    console.log(`📤 Sending game start to ${player.name} with ${gameState.playerHand.length} cards`);
+                    playerSocket.emit('gameStart', gameState);
+                }
+            });
+
+            // Notify whose turn it is
+            this.io.to(data.roomCode).emit('playerTurn', {
+                playerId: game.currentPlayer.id,
+                playerName: game.currentPlayer.name
+            });
+
+            console.log(`🎲 Game started successfully in room: ${data.roomCode}`);
+            console.log(`🔄 First turn: ${game.currentPlayer.name}`);
+
+        } catch (error) {
+            console.error(`❌ Error starting game: ${error.message}`);
+            socket.emit('error', { message: error.message });
+        }
     }
 
     // Game Action Handlers
@@ -443,55 +375,37 @@ class SocketHandler {
     }
 
     handleChatMessage(socket, data) {
-        const roomCodeValidation = Validator.validateRoomCode(data?.roomCode);
-        if (!roomCodeValidation.valid) {
-            throw new ValidationError(roomCodeValidation.error);
+        try {
+            const game = this.gameManager.getGameByRoomCode(data.roomCode);
+            if (!game) {
+                socket.emit('error', { message: 'Game not found' });
+                return;
+            }
+
+            // Verify player is in the game
+            const player = game.players.find(p => p.id === socket.id);
+            if (!player) {
+                socket.emit('error', { message: 'You are not in this game' });
+                return;
+            }
+
+            // Broadcast chat message to all players in the room
+            this.io.to(data.roomCode).emit('chatMessage', {
+                playerId: socket.id,
+                playerName: data.playerName || player.name,
+                message: data.message,
+                timestamp: Date.now()
+            });
+
+            console.log(`💬 ${data.playerName || player.name} sent a chat message in room ${data.roomCode}`);
+        } catch (error) {
+            console.error(`❌ Error handling chat message: ${error.message}`);
+            socket.emit('error', { message: error.message });
         }
-
-        const messageValidation = Validator.validateChatMessage(data?.message);
-        if (!messageValidation.valid) {
-            throw new ValidationError(messageValidation.error);
-        }
-
-        const game = this.gameManager.getGameByRoomCode(roomCodeValidation.sanitized);
-        if (!game) {
-            throw new NotFoundError('Game not found');
-        }
-
-        // Verify player is in the game
-        const player = game.players.find(p => p.id === socket.id);
-        if (!player) {
-            throw new UnauthorizedError('You are not in this game');
-        }
-
-        // Sanitize message
-        const sanitizedMessage = Sanitizer.sanitizeChatMessage(messageValidation.sanitized);
-
-        // Broadcast chat message to all players in the room
-        this.io.to(roomCodeValidation.sanitized).emit('chatMessage', {
-            playerId: socket.id,
-            playerName: Sanitizer.escapeHtml(player.name),
-            message: sanitizedMessage,
-            timestamp: Date.now()
-        });
-
-        console.log(`💬 ${player.name} sent a chat message in room ${game.roomCode}`);
     }
 
     handleDisconnect(socket) {
         console.log(`🔌 Player disconnected: ${socket.id}`);
-
-        // Clean up rate limiter
-        rateLimiter.reset(socket.id);
-
-        // Remove all event listeners to prevent memory leaks
-        const handlers = this.socketHandlers.get(socket.id);
-        if (handlers) {
-            handlers.forEach(({ event, handler }) => {
-                socket.removeListener(event, handler);
-            });
-            this.socketHandlers.delete(socket.id);
-        }
 
         const result = this.gameManager.removePlayer(socket.id);
         if (result && result.game) {

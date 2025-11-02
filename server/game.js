@@ -7,22 +7,9 @@ class GameManager {
     generateRoomCode() {
         const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
-        let attempts = 0;
-        const maxAttempts = 100;
-
-        // Ensure no collisions
-        do {
-            result = '';
-            for (let i = 0; i < 6; i++) {
-                result += characters.charAt(Math.floor(Math.random() * characters.length));
-            }
-            attempts++;
-            
-            if (attempts >= maxAttempts) {
-                throw new Error('Failed to generate unique room code after multiple attempts');
-            }
-        } while (this.games.has(result));
-
+        for (let i = 0; i < 6; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
         return result;
     }
 
@@ -41,18 +28,15 @@ class GameManager {
     joinGame(roomCode, player) {
         const game = this.games.get(roomCode);
         if (!game) {
-            const { NotFoundError } = require('./utils/errors');
-            throw new NotFoundError('Game not found');
+            throw new Error('Game not found');
         }
 
         if (game.players.length >= 6) {
-            const { ConflictError } = require('./utils/errors');
-            throw new ConflictError('Game is full (max 6 players)');
+            throw new Error('Game is full (max 6 players)');
         }
 
         if (game.gameStarted) {
-            const { ConflictError } = require('./utils/errors');
-            throw new ConflictError('Game has already started');
+            throw new Error('Game has already started');
         }
 
         game.addPlayer(player);

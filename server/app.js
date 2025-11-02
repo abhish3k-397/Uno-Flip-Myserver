@@ -6,10 +6,9 @@ const compression = require('compression');
 const crypto = require('crypto');
 const fs = require('fs');
 
-const GameManager = require('./core/game');
-const SocketHandler = require('./handlers/socket');
+const GameManager = require('./game');
+const SocketHandler = require('./socket');
 const config = require('./config');
-const { handleHttpError } = require('./utils/errors');
 
 class UnoServer {
     constructor() {
@@ -17,7 +16,13 @@ class UnoServer {
         this.server = http.createServer(this.app);
         this.io = socketIo(this.server, {
             cors: {
-                origin: "*",
+                origin: (origin, callback) => {
+                    const allowed = config.allowedOrigins;
+                    if (!allowed || allowed.length === 0) return callback(null, true);
+                    if (!origin) return callback(null, true);
+                    if (allowed.includes(origin)) return callback(null, true);
+                    return callback(new Error('Not allowed by CORS'));
+                },
                 methods: ["GET", "POST"]
             }
         });
@@ -206,13 +211,9 @@ class UnoServer {
         this.app.get('/health', (req, res) => {
             res.json({ status: 'OK', timestamp: new Date().toISOString() });
         });
-
-        // Error handling middleware (must be last)
-        this.app.use(handleHttpError);
     }
 
-    start() {
-        const port = config.port;
+    start(port = 3000) {
         this.app.set('trust proxy', 1);
         this.server.listen(port, '0.0.0.0', () => {
             console.log(`🚀 UNO Flip Server running on port ${port}`);
@@ -223,6 +224,6 @@ class UnoServer {
 
 // Start the server
 const server = new UnoServer();
-server.start();
+server.start(config.port);
 
 module.exports = UnoServer;

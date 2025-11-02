@@ -47,23 +47,11 @@ To get a local copy up and running, follow these simple steps.
 
 ### Running the Application
 
-**Development:**
-```sh
-npm run dev
-```
-
-**Production (builds assets and starts server):**
-```sh
-npm start
-```
-
-**Or run separately:**
-```sh
-npm run build     # Build assets only
-npm run server    # Start server only (assumes assets are built)
-```
-
-Open your browser and navigate to `http://localhost:3000`.
+1.  Start the server:
+    ```sh
+    npm start
+    ```
+2.  Open your browser and navigate to `http://localhost:3000`.
 
 ## Project Structure
 

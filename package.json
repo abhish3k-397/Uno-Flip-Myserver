@@ -4,11 +4,9 @@
   "description": "Web-based UNO Flip game for 2-6 players",
   "main": "server/app.js",
   "scripts": {
-    "start": "npm run build:assets && NODE_ENV=production node server/app.js",
+    "start": "node server/app.js",
     "dev": "nodemon server/app.js",
-    "build:assets": "esbuild public/js/index.js --bundle --minify --sourcemap --outfile=public/js/bundle.js",
-    "build": "npm run build:assets",
-    "server": "node server/app.js"
+    "build:assets": "esbuild public/js/index.js --bundle --minify --sourcemap --outfile=public/js/bundle.js"
   },
   "dependencies": {
     "compression": "^1.7.4",
