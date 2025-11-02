@@ -468,10 +468,10 @@ class UnoClient {
         // Helper function to generate image mappings for a color
         const generateColorMappings = (color, isDark = false) => {
             const mappings = {};
-            const numberWords = ['one','two','three','four','five','six','seven','eight','nine'];
+            const numberWords = ['zero','one','two','three','four','five','six','seven','eight','nine'];
 
             // Number cards (zero - nine) — keys use word names like 'one', 'two'
-            for (let i = 1; i <= 9; i++) {
+            for (let i = 0; i <= 9; i++) {
                 mappings[`${color}_${numberWords[i]}`] = `${basePath}${color}_${numberWords[i]}.webp`;
             }
 
