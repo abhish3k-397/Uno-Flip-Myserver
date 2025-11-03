@@ -1710,7 +1710,7 @@ body[data-theme="dark"] {
 
 /* Card back styling for deck */
 .deck-card {
-    background-image: url('../images/wild_light.webp') !important;
+    background-image: url('../images/card_back.webp') !important;
 }
 
 /* Card content overlay for text/symbols */
@@ -1787,7 +1787,7 @@ body[data-theme="dark"] {
 
 /* Card back styling for deck */
 .deck-card {
-    background-image: url('../images/wild_light.webp') !important;
+    background-image: url('../images/card_back.webp') !important;
 }
 
 /* Card content overlay for text/symbols */

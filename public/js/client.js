@@ -375,9 +375,8 @@ class UnoClient {
         // Generate mappings for all colors
         const imageMappings = {
             // Card back (support both dashed and underscored names)
-            // TODO: Replace with actual card-back.webp when available
-            'card-back': `${basePath}wild_light.webp`,
-            'card_back': `${basePath}wild_light.webp`,
+            'card-back': `${basePath}card_back.webp`,
+            'card_back': `${basePath}card_back.webp`,
 
             // Light side colors
             ...generateColorMappings('red'),
@@ -1072,6 +1071,11 @@ class UnoClient {
     clientCanPlay(card, topCard) {
         if (!card || !topCard) return false;
 
+        // If draw-until is active, no plays are allowed; player must draw
+        if (this.lastGameState?.drawUntilColor) {
+            return false;
+        }
+
         // If there is a pending draw penalty, only the same draw type can be stacked
         const pendingCount = this.lastGameState?.pendingDrawCount || 0;
         const pendingType = this.lastGameState?.pendingDrawType || null;
@@ -1232,6 +1236,10 @@ class UnoClient {
                 }
             } else {
                 if (turnInstruction) turnInstruction.innerHTML = '<i class="fas fa-gamepad"></i><span>Play a card or draw from the deck</span>';
+                // Ensure End Turn is disabled at the start of each new turn until a draw occurs
+                if (this.endTurnButton) {
+                    this.endTurnButton.disabled = true;
+                }
             }
             
             document.body.classList.add('my-turn');
