@@ -413,6 +413,12 @@ class UnoGame {
             return false;
         }
 
+        // If a draw-until-color is active, the current player must draw and cannot play any card
+        if (this.drawUntilColor) {
+            console.log(`❌ Draw-until active for color ${this.drawUntilColor}. No plays allowed.`);
+            return false;
+        }
+
         const getSideProps = (c) => {
             if (!c) return null;
             if (c.light && c.dark) {
@@ -439,7 +445,7 @@ class UnoGame {
             return false;
         }
 
-        // Wild cards can always be played (both wild and flip)
+        // Wild cards can always be played (both wild and flip) when no penalties/effects are active
         if (cardS.color === 'wild') {
             console.log('✅ Wild card can always be played');
             return true;
