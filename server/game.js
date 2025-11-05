@@ -39,7 +39,11 @@ class GameManager {
             throw new Error('Game has already started');
         }
 
-        game.addPlayer(player);
+        // Idempotent join: if this player (by socket id) is already in the game, return game without adding again
+        const alreadyInGame = game.players.some(p => p.id === player.id);
+        if (!alreadyInGame) {
+            game.addPlayer(player);
+        }
         this.playerGameMap.set(player.id, roomCode);
         
         console.log(`👤 ${player.name} joined game: ${roomCode}`);
@@ -257,6 +261,9 @@ class UnoGame {
         if (this.deck.length === 0) {
             this.reshuffleDiscardPile();
         }
+        if (this.deck.length === 0) {
+            return null;
+        }
         return this.deck.pop();
     }
 
@@ -318,44 +325,51 @@ class UnoGame {
         const playedCard = player.hand.splice(cardIndex, 1)[0];
         player.hasUno = player.hand.length === 1;
         
-    // Add to discard pile
-    this.discardPile.push(playedCard);
-    // Record the played card as the last played on the current side so flipping restores it
-    this.lastPlayed[this.currentSide] = playedCard;
-        // Always compact the discard pile so only bottom and top remain
-        this.reshuffleDiscardPile();
+        // Add to discard pile (we will compact only after we're sure the play stands)
+        this.discardPile.push(playedCard);
+        // Record the played card as the last played on the current side so flipping restores it
+        this.lastPlayed[this.currentSide] = playedCard;
 
         // Reset drawn card state
         this.hasDrawnCard = false;
 
         console.log(`✅ ${player.name} successfully played ${cardSideProps.color} ${cardSideProps.value}`);
 
-        // Handle special cards
-        this.handleSpecialCard({
-            color: cardSideProps.color,
-            value: cardSideProps.value
-        });
-
-        // Check for win
+        // If this play would leave the player with 0 cards and it's a power card (e.g., FLIP),
+        // invalidate the play: return the card, force a draw, and do NOT trigger its effect (no flip).
         if (player.hand.length === 0) {
             const isPowerCard = ['skip', 'reverse', 'draw1', 'flip', 'wild', 'wilddraw2', 'skipeveryone', 'draw5', 'wilddrawcolor'].includes(cardSideProps.value);
             if (isPowerCard) {
-                // Player cannot win with a power card, return the card to their hand and force them to draw
+                // Undo discard
+                this.discardPile.pop();
+                // Return played card to player's hand
                 player.hand.push(playedCard);
+                // Force draw one card
                 const drawnCard = this.drawCard();
-                player.hand.push(drawnCard);
+                if (drawnCard) player.hand.push(drawnCard);
                 player.hasUno = false;
-                this.discardPile.pop(); // Remove the card from the discard pile
-                this.lastPlayed[this.currentSide] = this.getRawTopCard(); // Reset last played card
+                // Reset lastPlayed to the actual current top
+                const currentTop = this.getRawTopCard();
+                this.lastPlayed[this.currentSide] = currentTop;
 
                 return {
                     success: false,
-                    message: "You cannot win with a power card! You drew a card instead.",
+                    message: 'You cannot win with a power card! You drew a card instead.',
                     gameOver: false,
                     playedCard: null,
                     requiresColorChoice: false
                 };
             }
+        }
+
+        // Handle special cards (safe now that the play is validated)
+        this.handleSpecialCard({
+            color: cardSideProps.color,
+            value: cardSideProps.value
+        });
+
+        // Check for win (only non-power cards can win)
+        if (player.hand.length === 0) {
             this.gameOver = true;
             return { 
                 success: true, 
@@ -398,6 +412,9 @@ class UnoGame {
             // Default: advance one player
             this.nextTurn();
         }
+
+        // Now that the play stands, compact the discard pile for performance/size
+        this.reshuffleDiscardPile();
 
         return { 
             success: true, 
@@ -612,6 +629,12 @@ class UnoGame {
             let drawnCard;
             do {
                 drawnCard = this.drawCard();
+                if (!drawnCard) {
+                    // Deck depleted: end game and declare winner by fewest cards
+                    const winner = this.determineWinnerByFewestCards();
+                    this.gameOver = true;
+                    return { type: 'gameOver', reason: 'deckDepleted', winner };
+                }
                 player.hand.push(drawnCard);
                 drawnCards.push(drawnCard);
                 
@@ -635,6 +658,11 @@ class UnoGame {
         if (this.pendingDrawCount > 0) {
             for (let i = 0; i < this.pendingDrawCount; i++) {
                 const penaltyCard = this.drawCard();
+                if (!penaltyCard) {
+                    const winner = this.determineWinnerByFewestCards();
+                    this.gameOver = true;
+                    return { type: 'gameOver', reason: 'deckDepleted', winner };
+                }
                 player.hand.push(penaltyCard);
             }
             player.hasUno = player.hand.length === 1;
@@ -649,6 +677,11 @@ class UnoGame {
 
         // Normal draw (no pending penalty)
         const card = this.drawCard();
+        if (!card) {
+            const winner = this.determineWinnerByFewestCards();
+            this.gameOver = true;
+            return { type: 'gameOver', reason: 'deckDepleted', winner };
+        }
         player.hand.push(card);
         player.hasUno = player.hand.length === 1;
         this.hasDrawnCard = true;
@@ -656,6 +689,20 @@ class UnoGame {
         // VOLUNTARY DRAW: do NOT end the player's turn automatically.
         // Return a structured result so the socket handler can notify clients appropriately.
         return { type: 'normal', card };
+    }
+
+    determineWinnerByFewestCards() {
+        if (this.players.length === 0) return null;
+        let winner = this.players[0];
+        let minCount = winner.hand.length;
+        for (let i = 1; i < this.players.length; i++) {
+            const count = this.players[i].hand.length;
+            if (count < minCount) {
+                minCount = count;
+                winner = this.players[i];
+            }
+        }
+        return winner;
     }
 
     endTurn(playerId) {

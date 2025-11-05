@@ -64,6 +64,7 @@ class SocketHandler {
 
             socket.join(game.roomCode);
             
+            // Always emit joinSuccess idempotently so client can safely click multiple times without duplicates
             socket.emit('joinSuccess', {
                 roomCode: game.roomCode,
                 players: game.players
@@ -138,6 +139,15 @@ class SocketHandler {
 
             const result = game.playCard(playerId, data.cardIndex);
 
+            // Handle invalid play (e.g., trying to go out with a power card like FLIP)
+            if (!result.success) {
+                // Send error to the acting player
+                socket.emit('error', { message: result.message || 'Invalid play' });
+                // Broadcast authoritative game state after reverting/penalizing
+                this.broadcastGameState(data.roomCode, game);
+                return;
+            }
+
             // If it's a wild card that requires color choice, wait for that
             if (result.requiresColorChoice) {
                 socket.emit('chooseColor', {
@@ -179,7 +189,7 @@ class SocketHandler {
                 return;
             }
 
-            // Handle flip card
+            // Handle flip card (only on valid plays)
             if (result.playedCard && result.playedCard.value === 'flip') {
                 this.io.to(data.roomCode).emit('gameFlipped', {
                     newSide: game.currentSide
@@ -215,7 +225,13 @@ class SocketHandler {
             this.broadcastGameState(data.roomCode, game);
 
             // Handle different draw types
-            if (drawResult && drawResult.type === 'drawUntilColor') {
+            if (drawResult && drawResult.type === 'gameOver') {
+                this.io.to(data.roomCode).emit('gameOver', {
+                    winner: drawResult.winner,
+                    winnerName: drawResult.winner?.name || 'Unknown'
+                });
+                return;
+            } else if (drawResult && drawResult.type === 'drawUntilColor') {
                 this.io.to(data.roomCode).emit('drawUntilColor', {
                     playerName: game.players.find(p => p.id === playerId).name,
                     playerId: playerId,

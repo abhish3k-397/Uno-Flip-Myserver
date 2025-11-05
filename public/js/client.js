@@ -22,6 +22,9 @@ class UnoClient {
         this.addCardStyles();
         this.createActionButtons();
         this.initializeChat();
+
+        // Prevent duplicate join requests
+        this.isJoining = false;
     }
 
     showRules() {
@@ -419,8 +422,8 @@ class UnoClient {
             // Special image to show when a wild-draw-until (wilddrawcolor) has a chosen color
             'wild_drawuntill': `${basePath}draw_until.webp`,
 
-            // Default fallback
-            'default': `${basePath}wild_light.webp`
+            // Default fallback (empty to avoid wrong-side artifacts)
+            'default': ``
         };
 
         console.log('Card images initialized with word names:', imageMappings);
@@ -432,6 +435,14 @@ class UnoClient {
         if (!card) return this.cardImages.default;
 
         const { color, value, side } = card;
+
+        // Guard: wilddraw2 should never render as a colored card in hand.
+        // If a card somehow has a non-wild color with value 'wilddraw2' but no chosenColor context,
+        // force the generic wild draw two image so it doesn't appear as a real colored card.
+        if (value === 'wilddraw2' && color !== 'wild' && !card.chosenColor) {
+            const genericPlus2 = this.cardImages['wild_wilddraw2'] || this.cardImages['wild_light'] || '';
+            if (genericPlus2) return genericPlus2;
+        }
 
         // If server provided a chosenColor on the top card, prefer that color-specific wild image
         // Special-cases:
@@ -511,8 +522,8 @@ class UnoClient {
             imagePath = this.cardImages[fallbackKey];
         }
 
-        // Return found image or default
-        return imagePath || this.cardImages.default;
+        // Return found image only; let callers render color styles if missing
+        return imagePath || '';
     }
 
     // Debug helper to verify mapping
@@ -652,7 +663,7 @@ class UnoClient {
 
             // Set card image
             const cardImage = this.getCardImage(topCard);
-            if (cardImage && cardImage !== this.cardImages.default) {
+            if (cardImage) {
                 this.setCardBackground(discardPile, cardImage);
                 discardPile.classList.add('image-card');
             } else {
@@ -782,6 +793,11 @@ class UnoClient {
     }
 
     joinGame() {
+        // Guard: if already joined or a join is in-flight, ignore repeated clicks
+        if (this.roomCode || this.isJoining) {
+            return;
+        }
+
         const playerName = document.getElementById('playerName').value.trim();
         const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
 
@@ -796,6 +812,10 @@ class UnoClient {
         }
 
         this.playerName = playerName;
+        this.isJoining = true;
+        // Disable the Join button immediately to debounce rapid clicks
+        const joinBtn = document.getElementById('joinGame');
+        if (joinBtn) joinBtn.disabled = true;
         this.connectToServer();
 
         setTimeout(() => {
@@ -819,6 +839,12 @@ class UnoClient {
         this.showMessage(`🔗 Joined game: ${data.roomCode}`, 'success');
         document.getElementById('roomIdDisplay').textContent = data.roomCode;
         this.updateLobby(data);
+        // Lock join controls after successful join
+        this.isJoining = false;
+        const joinBtn = document.getElementById('joinGame');
+        if (joinBtn) joinBtn.disabled = true;
+        const roomInput = document.getElementById('roomCode');
+        if (roomInput) roomInput.disabled = true;
     }
 
     updateLobby(data) {
