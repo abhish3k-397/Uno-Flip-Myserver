@@ -1,22 +1,42 @@
-name: Deploy-Dev
+name: Deploy-to-Termux
 
 on:
   push:
-    branches: [dev]
+    branches: [main, dev]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH + deploy
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: SSH + deploy to Termux
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
+          host: ${{ secrets.TERMUX_IP }}
+          username: ${{ secrets.TERMUX_USER }}
+          key: ${{ secrets.TERMUX_SSH_KEY }}
+          port: 8022
           script: |
-            cd /home/ubuntu/Uno-Flip-Dev
-            git pull
-            docker compose down
-            docker compose build --no-cache
-            docker compose up -d
+            # Create directory if it doesn't exist
+            mkdir -p ~/Uno-Flip
+            cd ~/Uno-Flip
+            
+            # Initialize git if needed
+            if [ ! -d .git ]; then
+              git clone https://github.com/abhish3k-397/Uno-Flip-Myserver.git .
+            fi
+            
+            git pull origin main
+            
+            # Restart your app (assuming Node.js for this example)
+            # Replace these with your actual start commands:
+            # npm install
+            # pm2 restart all || pm2 start index.js --name "uno-flip"
+
